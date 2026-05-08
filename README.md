@@ -358,7 +358,7 @@ For issues and questions:
 
 ## 📞 Contact
 
-- **Author:** Ahmed Fares
+- **Author:** mohannad amr 
 - **GitHub:** [@hondaa2003](https://github.com/hondaa2003)
 
 ---
