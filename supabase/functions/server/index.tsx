@@ -2,7 +2,6 @@ import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
@@ -38,7 +37,6 @@ app.post(`${BASE}/signup`, async (c) => {
       email,
       password,
       user_metadata: { name: name || "" },
-      // Automatically confirm the user's email since an email server hasn't been configured.
       email_confirm: true,
     });
     if (error) {
@@ -52,9 +50,7 @@ app.post(`${BASE}/signup`, async (c) => {
   }
 });
 
-// Resolve the user from the Authorization header (if present and valid).
-// Anon key callers return null so the global anon scope still works for
-// landing/health.
+// Resolve the user from the Authorization header
 async function getUserId(authHeader: string | undefined): Promise<string | null> {
   if (!authHeader) return null;
   const token = authHeader.split(" ")[1];
@@ -71,68 +67,91 @@ async function getUserId(authHeader: string | undefined): Promise<string | null>
 const COLLECTIONS = ["products", "orders", "campaigns"] as const;
 type Collection = (typeof COLLECTIONS)[number];
 
-// Per-user scoping: when a real user token is present, all CRUD is scoped
-// under `u:{userId}:{collection}:{id}`. Anonymous callers (anon key) share
-// the legacy `{collection}:{id}` namespace so the public landing demo keeps
-// working.
-function prefixFor(userId: string | null, collection: Collection) {
-  return userId ? `u:${userId}:${collection}:` : `${collection}:`;
-}
-
 for (const collection of COLLECTIONS) {
+  // List
   app.get(`${BASE}/${collection}`, async (c) => {
     try {
       const userId = await getUserId(c.req.header("Authorization"));
-      const items = await kv.getByPrefix(prefixFor(userId, collection));
-      return c.json({ items: items ?? [] });
+      if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
+      const { data, error } = await supabaseAdmin
+        .from(collection)
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return c.json({ items: data ?? [] });
     } catch (err) {
       console.log(`Error listing ${collection}: ${err}`);
       return c.json({ error: `Failed to list ${collection}: ${err}` }, 500);
     }
   });
 
+  // Create
   app.post(`${BASE}/${collection}`, async (c) => {
     try {
       const userId = await getUserId(c.req.header("Authorization"));
+      if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
       const body = await c.req.json();
-      const id =
-        body.id ||
-        `${collection.slice(0, 1)}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const record = { ...body, id, updatedAt: new Date().toISOString() };
-      await kv.set(`${prefixFor(userId, collection)}${id}`, record);
-      return c.json({ item: record });
+      // Remove id if present to let Postgres generate it, or keep if it's a valid UUID
+      const { id, ...rest } = body;
+      
+      const { data, error } = await supabaseAdmin
+        .from(collection)
+        .insert({ ...rest, user_id: userId })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return c.json({ item: data });
     } catch (err) {
       console.log(`Error creating ${collection}: ${err}`);
       return c.json({ error: `Failed to create ${collection}: ${err}` }, 500);
     }
   });
 
+  // Update
   app.put(`${BASE}/${collection}/:id`, async (c) => {
     try {
       const userId = await getUserId(c.req.header("Authorization"));
+      if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
       const id = c.req.param("id");
       const body = await c.req.json();
-      const key = `${prefixFor(userId, collection)}${id}`;
-      const existing = await kv.get(key);
-      const record = {
-        ...(existing || {}),
-        ...body,
-        id,
-        updatedAt: new Date().toISOString(),
-      };
-      await kv.set(key, record);
-      return c.json({ item: record });
+      const { user_id, created_at, ...updateData } = body;
+
+      const { data, error } = await supabaseAdmin
+        .from(collection)
+        .update(updateData)
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return c.json({ item: data });
     } catch (err) {
       console.log(`Error updating ${collection}: ${err}`);
       return c.json({ error: `Failed to update ${collection}: ${err}` }, 500);
     }
   });
 
+  // Delete
   app.delete(`${BASE}/${collection}/:id`, async (c) => {
     try {
       const userId = await getUserId(c.req.header("Authorization"));
+      if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
       const id = c.req.param("id");
-      await kv.del(`${prefixFor(userId, collection)}${id}`);
+      const { error } = await supabaseAdmin
+        .from(collection)
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      if (error) throw error;
       return c.json({ ok: true });
     } catch (err) {
       console.log(`Error deleting ${collection}: ${err}`);
