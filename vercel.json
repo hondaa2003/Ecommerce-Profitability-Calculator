@@ -3,20 +3,6 @@
   "buildCommand": "pnpm install && pnpm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "env": {
-    "VITE_SUPABASE_URL": "@supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "VITE_SALLA_CLIENT_ID": "@salla_client_id",
-    "VITE_SALLA_CLIENT_SECRET": "@salla_client_secret",
-    "VITE_ZID_CLIENT_ID": "@zid_client_id",
-    "VITE_ZID_CLIENT_SECRET": "@zid_client_secret",
-    "VITE_SHOPIFY_CLIENT_ID": "@shopify_client_id",
-    "VITE_SHOPIFY_CLIENT_SECRET": "@shopify_client_secret",
-    "VITE_META_APP_ID": "@meta_app_id",
-    "VITE_META_APP_SECRET": "@meta_app_secret",
-    "VITE_GOOGLE_CLIENT_ID": "@google_client_id",
-    "VITE_GOOGLE_CLIENT_SECRET": "@google_client_secret"
-  },
   "rewrites": [
     {
       "source": "/(.*)",
@@ -46,15 +32,6 @@
         {
           "key": "Permissions-Policy",
           "value": "geolocation=(), microphone=(), camera=()"
-        }
-      ]
-    },
-    {
-      "source": "/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
         }
       ]
     }
