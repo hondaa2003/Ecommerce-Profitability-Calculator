@@ -8,10 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { InfoTip } from "../InfoTip";
 import { tips } from "../glossary";
-import { Edit3, ImageIcon, Loader2, Plus, Trash2 } from "lucide-react";
+import { Edit3, ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { api } from "../api";
 import { toast } from "sonner";
 import { useI18n } from "../i18n";
+import { getSupabase } from "../supabase-client";
 
 interface ProductForm {
   name: string;
@@ -27,13 +28,11 @@ interface ProductForm {
   price: number;
 }
 
-
 function calculate(p: ProductForm) {
   const vatAmount = (p.price * p.vat) / 100;
   const totalCost = p.cogs + p.shipping + p.returnCost + p.cod + p.packaging + vatAmount;
   const profit = p.price - totalCost;
   const margin = p.price > 0 ? (profit / p.price) * 100 : 0;
-  // Break-even ROAS = price / (price - costs excluding ad spend)
   const breakEvenRoas = profit > 0 ? p.price / profit : 0;
   return { profit, margin, breakEvenRoas, totalCost };
 }
@@ -55,7 +54,9 @@ export function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
 
   const calc = useMemo(() => calculate(form), [form]);
@@ -87,21 +88,66 @@ export function Products() {
     })();
   }, []);
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const supabase = getSupabase();
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.name.split(".").pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+
+      set("image", data.publicUrl);
+      toast.success("Image uploaded successfully");
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+      toast.error("Could not upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const addProduct = async () => {
-    if (!form.name) return;
+    if (!form.name) {
+      toast.error("Product name is required");
+      return;
+    }
     setSaving(true);
     try {
-      const item = await api.create<Product>("products", form);
-      setProducts((p) => [item, ...p]);
+      if (editingId) {
+        const item = await api.update<Product>("products", editingId, form);
+        setProducts((p) => p.map((x) => (x.id === editingId ? item : x)));
+        toast.success("Product updated");
+      } else {
+        const item = await api.create<Product>("products", form);
+        setProducts((p) => [item, ...p]);
+        toast.success("Product saved");
+      }
       setForm(emptyForm);
+      setEditingId(null);
       setOpen(false);
-      toast.success("Product saved");
     } catch (err) {
-      console.error("Failed to create product:", err);
+      console.error("Failed to save product:", err);
       toast.error("Could not save product");
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEdit = (product: Product) => {
+    setForm(product);
+    setEditingId(product.id);
+    setOpen(true);
   };
 
   const deleteProduct = async (id: string) => {
@@ -116,6 +162,12 @@ export function Products() {
     }
   };
 
+  const closeDialog = () => {
+    setOpen(false);
+    setForm(emptyForm);
+    setEditingId(null);
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <div className="flex flex-wrap justify-between items-center gap-3">
@@ -123,7 +175,7 @@ export function Products() {
           <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>Products</h1>
           <p className="text-slate-500 text-sm">Manage your catalog and auto-calculate profitability per product.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
           <DialogTrigger asChild>
             <Button className="bg-blue-700 hover:bg-blue-800">
               <Plus className="w-4 h-4 mr-1" /> Add Product
@@ -131,7 +183,7 @@ export function Products() {
           </DialogTrigger>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
+              <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
             </DialogHeader>
             <div className="grid md:grid-cols-2 gap-5 mt-2">
               <div className="space-y-3">
@@ -145,9 +197,31 @@ export function Products() {
                   <Input value={form.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SW-X-001" />
                 </Field>
                 <Field label="Product Image">
-                  <div className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400">
-                    <ImageIcon className="w-6 h-6 mb-1" />
-                    <div className="text-xs">Upload or paste URL</div>
+                  <div className="space-y-2">
+                    {form.image && (
+                      <div className="relative w-full h-32 rounded-lg overflow-hidden bg-slate-100">
+                        <img src={form.image} alt="Product" className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => set("image", "")}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-lg hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    <label className="border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-slate-400 transition-colors">
+                      <Upload className="w-5 h-5 mb-1" />
+                      <div className="text-xs">
+                        {uploading ? "Uploading..." : "Click to upload image"}
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 </Field>
                 <Field label="Selling Price (AED)" tip={tips.sellingPrice}>{numberInput("price")}</Field>
@@ -175,9 +249,10 @@ export function Products() {
             </Card>
 
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button className="bg-blue-700 hover:bg-blue-800" onClick={addProduct} disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save Product
+              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button className="bg-blue-700 hover:bg-blue-800" onClick={addProduct} disabled={saving || uploading}>
+                {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                {editingId ? "Update Product" : "Save Product"}
               </Button>
             </div>
           </DialogContent>
@@ -229,28 +304,34 @@ export function Products() {
                 <TableRow key={p.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
-                        <ImageIcon className="w-4 h-4" />
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden">
+                        {p.image ? (
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="w-4 h-4" />
+                        )}
                       </div>
                       <div>
-                        <div className="text-slate-900 text-sm">{p.name}</div>
+                        <div className="text-slate-900 text-sm font-medium">{p.name}</div>
                         <div className="text-xs text-slate-400">{p.url}</div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-slate-600">{p.sku}</TableCell>
                   <TableCell>AED {p.price}</TableCell>
-                  <TableCell className={c.profit >= 0 ? "text-emerald-600" : "text-orange-600"}>
+                  <TableCell className={c.profit >= 0 ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
                     {c.profit >= 0 ? "+" : "-"}AED {Math.abs(c.profit).toFixed(0)}
                   </TableCell>
-                  <TableCell>{c.margin.toFixed(1)}%</TableCell>
+                  <TableCell className="font-medium">{c.margin.toFixed(1)}%</TableCell>
                   <TableCell>{c.breakEvenRoas.toFixed(2)}x</TableCell>
                   <TableCell>
-                    <Badge className={`${status.classes} hover:${status.classes}`}>{status.label}</Badge>
+                    <Badge className={`${status.classes} hover:${status.classes} border`}>{status.label}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="text-slate-500"><Edit3 className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="sm" className="text-slate-500"
+                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-blue-700" onClick={() => startEdit(p)}>
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-red-700"
                       onClick={() => deleteProduct(p.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -268,7 +349,7 @@ export function Products() {
 function Field({ label, tip, children }: { label: string; tip?: { title: string; content: string }; children: React.ReactNode }) {
   return (
     <div>
-      <Label className="text-slate-700 mb-1 flex items-center gap-1">
+      <Label className="text-slate-700 mb-1 flex items-center gap-1 font-medium">
         {label}
         {tip && <InfoTip {...tip} />}
       </Label>
@@ -285,10 +366,10 @@ function Stat({ label, value, tip, color }: { label: string; value: string; tip?
   };
   return (
     <div className={`rounded-lg p-3 ${color ? palette[color] : "bg-white border border-slate-200"}`}>
-      <div className="text-xs flex items-center gap-1 opacity-80">
+      <div className="text-xs flex items-center gap-1 opacity-80 font-medium">
         {label}{tip && <InfoTip {...tip} />}
       </div>
-      <div className="mt-1">{value}</div>
+      <div className="mt-1 font-semibold">{value}</div>
     </div>
   );
 }
