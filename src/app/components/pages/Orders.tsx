@@ -8,22 +8,22 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { InfoTip } from "../InfoTip";
 import { tips } from "../glossary";
-import { Loader2, Plug, Plus } from "lucide-react";
+import { Loader2, Plug, Plus, Trash2, Edit3, AlertCircle } from "lucide-react";
 import { useI18n } from "../i18n";
 
 type Status = "Delivered" | "Returned" | "Pending";
 
 interface Order {
   id: string;
-  product: string;
-  customer: string;
+  product_id?: string;
+  customer_name?: string;
   amount: number;
   status: Status;
-  date: string;
+  created_at?: string;
 }
-
 
 const statusBadge: Record<Status, string> = {
   Delivered: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -36,8 +36,10 @@ export function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [product, setProduct] = useState("");
-  const [customer, setCustomer] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [productId, setProductId] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [amount, setAmount] = useState(0);
   const [status, setStatus] = useState<Status>("Pending");
 
@@ -63,32 +65,81 @@ export function Orders() {
   const returnRate = total ? ((returned / total) * 100).toFixed(1) : "0";
 
   const addOrder = async () => {
-    if (!product) return;
+    if (!amount) {
+      toast.error("Amount is required");
+      return;
+    }
     setSaving(true);
     try {
-      const item = await api.create<Order>("orders", {
-        id: `#${Math.floor(Math.random() * 9000) + 1000}`,
-        product,
-        customer,
-        amount,
-        status,
-        date: "Today",
-      });
-      setOrders((o) => [item, ...o]);
-      setProduct(""); setCustomer(""); setAmount(0); setStatus("Pending");
-      toast.success("Order saved");
+      if (editingId) {
+        const item = await api.update<Order>("orders", editingId, {
+          product_id: productId || null,
+          customer_name: customerName || null,
+          amount,
+          status,
+        });
+        setOrders((o) => o.map((x) => (x.id === editingId ? item : x)));
+        toast.success("Order updated");
+      } else {
+        const item = await api.create<Order>("orders", {
+          product_id: productId || null,
+          customer_name: customerName || null,
+          amount,
+          status,
+        });
+        setOrders((o) => [item, ...o]);
+        toast.success("Order saved");
+      }
+      resetForm();
+      setOpen(false);
     } catch (err) {
-      console.error("Failed to create order:", err);
+      console.error("Failed to save order:", err);
       toast.error("Could not save order");
     } finally {
       setSaving(false);
     }
   };
 
+  const deleteOrder = async (id: string) => {
+    const previous = orders;
+    setOrders((arr) => arr.filter((x) => x.id !== id));
+    try {
+      await api.remove("orders", id);
+    } catch (err) {
+      console.error("Failed to delete order:", err);
+      toast.error("Could not delete order");
+      setOrders(previous);
+    }
+  };
+
+  const startEdit = (order: Order) => {
+    setProductId(order.product_id || "");
+    setCustomerName(order.customer_name || "");
+    setAmount(order.amount);
+    setStatus(order.status);
+    setEditingId(order.id);
+    setOpen(true);
+  };
+
+  const resetForm = () => {
+    setProductId("");
+    setCustomerName("");
+    setAmount(0);
+    setStatus("Pending");
+    setEditingId(null);
+  };
+
+  const closeDialog = () => {
+    setOpen(false);
+    resetForm();
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <div>
-        <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>Orders & Fulfillment</h1>
+        <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>
+          Orders & Fulfillment
+        </h1>
         <p className="text-slate-500 text-sm">Track delivery success, returns, and overall fulfillment health.</p>
       </div>
 
@@ -98,79 +149,114 @@ export function Orders() {
         <Mini label="Delivered" value={delivered.toString()} tip={tips.delivered} color="emerald" />
         <Mini label="Returned" value={returned.toString()} tip={tips.returnRate} color="orange" />
         <Mini label="Pending" value={pending.toString()} tip={tips.pending} color="blue" />
-        <Mini label="Success Rate" value={`${successRate}%`} tip={tips.successRate} color="emerald" />
+        <Mini label="Success Rate" value={`${successRate}%`} tip={tips.delivered} color="emerald" />
         <Mini label="Return Rate" value={`${returnRate}%`} tip={tips.returnRate} color="orange" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="p-5 rounded-2xl border-slate-200 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-slate-900">Manual Order Entry</div>
-              <div className="text-xs text-slate-500">Add orders not yet synced from your store.</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div className="md:col-span-2">
-              <Label className="text-slate-700 mb-1">Product</Label>
-              <Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Smart Watch X" />
-            </div>
-            <div>
-              <Label className="text-slate-700 mb-1">Customer</Label>
-              <Input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Name" />
-            </div>
-            <div>
-              <Label className="text-slate-700 mb-1">Amount (AED)</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-            </div>
-            <div>
-              <Label className="text-slate-700 mb-1">Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Delivered">Delivered</SelectItem>
-                  <SelectItem value="Returned">Returned</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <Button onClick={addOrder} disabled={saving} className="bg-blue-700 hover:bg-blue-800">
-              {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />} Add Order
+      {/* Add Order Button */}
+      <div className="flex justify-between items-center">
+        <div></div>
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-700 hover:bg-blue-800">
+              <Plus className="w-4 h-4 mr-1" /> Add Order
             </Button>
-          </div>
-        </Card>
-
-        <Card className="p-5 rounded-2xl border-slate-200">
-          <div className="text-slate-900 mb-1">Store Integrations</div>
-          <div className="text-xs text-slate-500 mb-4">Coming soon</div>
-          <div className="space-y-3">
-            {["Salla API", "Zid API", "Shopify API"].map((p) => (
-              <div key={p} className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                    <Plug className="w-4 h-4" />
-                  </div>
-                  <div className="text-sm text-slate-900">{p}</div>
-                </div>
-                <Badge className="bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-50">Soon</Badge>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingId ? "Edit Order" : "Add New Order"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label className="text-slate-700 mb-1 block font-medium">Product ID (Optional)</Label>
+                <Input
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                  placeholder="e.g., product-123"
+                  className="bg-slate-50 border-slate-200"
+                />
               </div>
-            ))}
-          </div>
-        </Card>
+              <div>
+                <Label className="text-slate-700 mb-1 block font-medium">Customer Name (Optional)</Label>
+                <Input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="e.g., Ahmed Al-Mansouri"
+                  className="bg-slate-50 border-slate-200"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-700 mb-1 block font-medium">Amount (AED)</Label>
+                <Input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(Number(e.target.value))}
+                  placeholder="0"
+                  className="bg-slate-50 border-slate-200"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-700 mb-1 block font-medium">Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
+                  <SelectTrigger className="bg-slate-50 border-slate-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Returned">Returned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={closeDialog}>
+                  Cancel
+                </Button>
+                <Button className="bg-blue-700 hover:bg-blue-800" onClick={addOrder} disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                  {editingId ? "Update Order" : "Save Order"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
+      {/* Store Integrations */}
+      <Card className="p-6 rounded-2xl border-slate-200 bg-blue-50 border-blue-100">
+        <div className="flex items-start gap-4">
+          <AlertCircle className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 mb-2">Connect Your Store</h3>
+            <p className="text-sm text-blue-800 mb-4">
+              Automatically sync orders from your store. Coming soon: Shopify, Salla, Zid, WooCommerce
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
+                <Plug className="w-4 h-4 mr-1" /> Shopify
+              </Button>
+              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
+                <Plug className="w-4 h-4 mr-1" /> Salla
+              </Button>
+              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
+                <Plug className="w-4 h-4 mr-1" /> Zid
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Orders Table */}
       <Card className="rounded-2xl border-slate-200 overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50">
             <TableRow>
               <TableHead>Order ID</TableHead>
-              <TableHead>Product</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -186,28 +272,52 @@ export function Orders() {
                 <TableCell colSpan={6} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                      <Plug className="w-8 h-8 text-slate-400" />
+                      <AlertCircle className="w-8 h-8 text-slate-400" />
                     </div>
                     <div>
-                      <div className="text-slate-900 mb-1">{t("empty.noOrders")}</div>
-                      <div className="text-sm text-slate-500">{t("empty.noOrdersSub")}</div>
+                      <div className="text-slate-900 mb-1 font-medium">No orders yet</div>
+                      <div className="text-sm text-slate-500">Start by adding your first order or connecting a store</div>
                     </div>
                   </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && orders.map((o) => (
-              <TableRow key={o.id}>
-                <TableCell className="text-slate-900">{o.id}</TableCell>
-                <TableCell>{o.product}</TableCell>
-                <TableCell className="text-slate-600">{o.customer}</TableCell>
-                <TableCell>AED {o.amount}</TableCell>
-                <TableCell>
-                  <Badge className={`${statusBadge[o.status]} hover:${statusBadge[o.status]}`}>{o.status}</Badge>
-                </TableCell>
-                <TableCell className="text-slate-500">{o.date}</TableCell>
-              </TableRow>
-            ))}
+            {!loading &&
+              orders.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell className="font-mono text-sm text-slate-900">{o.id.slice(0, 8)}</TableCell>
+                  <TableCell className="text-slate-600">{o.customer_name || "-"}</TableCell>
+                  <TableCell className="font-semibold">AED {o.amount}</TableCell>
+                  <TableCell>
+                    <Badge className={`${statusBadge[o.status]} hover:${statusBadge[o.status]} border`}>
+                      {o.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {o.created_at
+                      ? new Date(o.created_at).toLocaleDateString("ar-AE")
+                      : "Today"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-500 hover:text-blue-700"
+                      onClick={() => startEdit(o)}
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-500 hover:text-red-700"
+                      onClick={() => deleteOrder(o.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </Card>
@@ -215,16 +325,30 @@ export function Orders() {
   );
 }
 
-function Mini({ label, value, tip, color = "blue" }: { label: string; value: string; tip: any; color?: string }) {
-  const palette: Record<string, string> = {
-    blue: "text-blue-700",
-    emerald: "text-emerald-600",
-    orange: "text-orange-600",
+function Mini({
+  label,
+  value,
+  tip,
+  color = "blue",
+}: {
+  label: string;
+  value: string;
+  tip: { title: string; content: string };
+  color?: string;
+}) {
+  const colorMap: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    orange: "bg-orange-50 text-orange-700",
   };
+
   return (
-    <Card className="p-4 rounded-2xl border-slate-200">
-      <div className="text-xs text-slate-500 flex items-center gap-1">{label} <InfoTip {...tip} /></div>
-      <div className={`mt-1 ${palette[color]}`}>{value}</div>
+    <Card className={`p-4 rounded-xl border-0 ${colorMap[color]}`}>
+      <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
+        {label}
+        <InfoTip {...tip} />
+      </div>
+      <div className="text-2xl font-bold">{value}</div>
     </Card>
   );
 }
