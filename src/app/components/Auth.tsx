@@ -1,126 +1,219 @@
-import { useState } from "react";
-import { Card } from "./ui/card";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { useI18n } from "./i18n";
-import { customerApi } from "./api";
-import { getSupabase } from "./supabase-client";
-import { toast } from "sonner";
-import { Loader2, Sparkles } from "lucide-react";
+import { useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { useNavigate } from 'react-router-dom'
+import { Mail, Lock, User, ArrowRight, Store } from 'lucide-react'
 
-interface Props {
-  onAuthed: () => void;
-  onBack: () => void;
-}
+export function Auth() {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const navigate = useNavigate()
 
-export function Auth({ onAuthed, onBack }: Props) {
-  const { t, dir } = useI18n();
-  const supabase = getSupabase();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setMessage('')
 
-  const submit = async () => {
-    if (password.length < 6) {
-      toast.error("كلمة المرور لازم تكون 6 أحرف على الأقل");
-      return;
-    }
-    setBusy(true);
     try {
-      if (mode === "signup") {
-        // Server endpoint creates the user with email auto-confirmed
-        await customerApi.signup(email, password, name);
-        toast.success("تم إنشاء الحساب بنجاح! جاري تسجيل الدخول...");
-      }
+      if (mode === 'signup') {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName },
+            emailRedirectTo: window.location.origin
+          }
+        })
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        throw error;
-      }
-      toast.success(`${t("store.hi")} ${data.user?.user_metadata?.name || ""}`);
-      onAuthed();
-    } catch (err: any) {
-      console.error("Auth failed:", err);
-      const msg = String(err?.message || "");
+        if (signUpError) throw signUpError
 
-      if (/rate limit|after \d+ seconds/i.test(msg)) {
-        toast.error("استنى دقيقة قبل محاولة جديدة (تجاوزت حد المحاولات).");
-      } else if (/email not confirmed/i.test(msg)) {
-        toast.error("الإيميل محتاج تأكيد. لو المشكلة مستمرة، جرّب إيميل تاني.");
-      } else if (/already been registered/i.test(msg)) {
-        toast.error("الإيميل ده مسجل من قبل. استخدم تسجيل الدخول بدلاً من إنشاء حساب جديد.");
-      } else if (/Invalid login credentials/i.test(msg)) {
-        toast.error("بيانات الدخول غير صحيحة. تأكد من الإيميل وكلمة المرور.");
+        if (data.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([{
+              id: data.user.id,
+              full_name: fullName,
+              email: email
+            }])
+
+          if (profileError) {
+            console.error('Profile creation error:', profileError)
+          }
+
+          setMessage('Account created! Please check your email to confirm.')
+          if (data.session) {
+            navigate('/dashboard')
+          }
+        }
       } else {
-        toast.error(msg || (mode === "signup" ? "تعذر إنشاء الحساب" : "بيانات الدخول غير صحيحة"));
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
+
+        if (signInError) throw signInError
+
+        if (data.session) {
+          navigate('/dashboard')
+        }
       }
+    } catch (err: any) {
+      console.error('Auth error:', err)
+      setError(err.message || 'Authentication failed. Please try again.')
     } finally {
-      setBusy(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div dir={dir} className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-6">
-      <Card className="w-full max-w-md p-8 rounded-2xl border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center">
-            <Sparkles className="w-5 h-5" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-200">
+            <Store className="w-8 h-8 text-white" />
           </div>
-          <div>
-            <div className="text-slate-900">ProfitPilot</div>
-            <div className="text-xs text-slate-500">{t("brand.tagline")}</div>
+          <h1 className="text-2xl font-bold text-slate-900">ProfitPilot</h1>
+          <p className="text-slate-500 mt-1">E-Commerce Profitability Calculator</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="flex border-b border-slate-200">
+            <button
+              onClick={() => { setMode('login'); setError(''); setMessage('') }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${
+                mode === 'login'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setMode('signup'); setError(''); setMessage('') }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${
+                mode === 'signup'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <div className="p-8">
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-start gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            {message && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm flex items-start gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                {message}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                      required={mode === 'signup'}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Must be at least 6 characters
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    {mode === 'signup' ? 'Create Account' : 'Sign In'}
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-slate-500">
+              {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button
+                onClick={() => {
+                  setMode(mode === 'signup' ? 'login' : 'signup')
+                  setError('')
+                  setMessage('')
+                }}
+                className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+              >
+                {mode === 'signup' ? 'Sign In' : 'Create Account'}
+              </button>
+            </p>
           </div>
         </div>
 
-        <h1 className="text-slate-900 mb-1" style={{ fontSize: "1.25rem", fontWeight: 600 }}>
-          {mode === "signup" ? t("store.joinTitle") : t("store.welcome")}
-        </h1>
-        <p className="text-sm text-slate-500 mb-5">
-          {mode === "signup" ? t("store.joinSub") : t("store.welcomeSub")}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
-
-        <div className="space-y-3">
-          {mode === "signup" && (
-            <div>
-              <Label className="mb-1">{t("store.fullName")}</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="أحمد محمد" />
-            </div>
-          )}
-          <div>
-            <Label className="mb-1">{t("store.email")}</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-          </div>
-          <div>
-            <Label className="mb-1">{t("store.password")}</Label>
-            <Input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-            <div className="text-xs text-slate-400 mt-1">6 أحرف على الأقل</div>
-          </div>
-        </div>
-
-        <Button
-          disabled={busy || !email || !password || (mode === "signup" && !name)}
-          onClick={submit}
-          className="w-full bg-blue-700 hover:bg-blue-800 mt-5"
-        >
-          {busy && <Loader2 className="w-4 h-4 me-1 animate-spin" />}
-          {mode === "signup" ? t("store.signup") : t("store.signin")}
-        </Button>
-
-        <div className="text-center text-sm text-slate-500 mt-4">
-          {mode === "signup" ? t("store.haveAccount") : t("store.noAccount")}{" "}
-          <button className="text-blue-700" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
-            {mode === "signup" ? t("store.signin") : t("store.signup")}
-          </button>
-        </div>
-        <div className="text-center mt-2">
-          <button className="text-xs text-slate-400 hover:text-slate-600" onClick={onBack}>
-            {t("store.back")}
-          </button>
-        </div>
-      </Card>
+      </div>
     </div>
-  );
+  )
 }
