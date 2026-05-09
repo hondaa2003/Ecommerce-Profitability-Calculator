@@ -1,380 +1,191 @@
-import { useEffect, useState } from "react";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Card } from "../ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { InfoTip } from "../InfoTip";
-import { tips } from "../glossary";
-import { Download, FileSpreadsheet, FileText, FileType, Loader2, Table } from "lucide-react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { api } from "../api";
-import { toast } from "sonner";
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  cogs: number;
-  shipping: number;
-  returnCost: number;
-  cod: number;
-  packaging: number;
-  vat: number;
-}
-
-interface Order {
-  id: string;
-  amount: number;
-  status: "Pending" | "Delivered" | "Returned";
-}
-
-interface Campaign {
-  id: string;
-  name: string;
-  platform: string;
-  spend: number;
-  orders_count: number;
-  revenue: number;
-}
-
-function calculateProductProfit(p: Product) {
-  const vatAmount = (p.price * p.vat) / 100;
-  const totalCost = p.cogs + p.shipping + p.returnCost + p.cod + p.packaging + vatAmount;
-  const profit = p.price - totalCost;
-  const margin = p.price > 0 ? (profit / p.price) * 100 : 0;
-  return { profit, margin, totalCost };
-}
-
-function exportToCSV(data: any[], filename: string) {
-  const headers = Object.keys(data[0] || {});
-  const csv = [
-    headers.join(","),
-    ...data.map((row) => headers.map((h) => JSON.stringify(row[h])).join(",")),
-  ].join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}.csv`;
-  a.click();
-  window.URL.revokeObjectURL(url);
-}
-
-function exportToJSON(data: any[], filename: string) {
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}.json`;
-  a.click();
-  window.URL.revokeObjectURL(url);
-}
+// src/components/pages/Reports.tsx
+import { useEffect, useState } from 'react'
+import { productsApi, ordersApi, campaignsApi } from '../../lib/supabase'
+import { Download, FileText, BarChart3, Calendar } from 'lucide-react'
 
 export function Reports() {
-  const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [trend, setTrend] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [campaigns, setCampaigns] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [dateRange, setDateRange] = useState('all')
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [productsData, ordersData, campaignsData] = await Promise.all([
-          api.list<Product>("products"),
-          api.list<Order>("orders"),
-          api.list<Campaign>("campaigns"),
-        ]);
+  useEffect(() => { loadData() }, [])
 
-        setProducts(productsData);
-        setOrders(ordersData);
-        setCampaigns(campaignsData);
-
-        // Generate trend data (weekly)
-        const trendData = Array.from({ length: 4 }, (_, i) => {
-          const weekRevenue = ordersData.slice(i * 7, (i + 1) * 7).reduce((sum, o) => sum + o.amount, 0);
-          const weekProfit = weekRevenue * 0.27; // Approximate 27% profit margin
-          return {
-            name: `W${i + 1}`,
-            revenue: weekRevenue || Math.random() * 20000 + 20000,
-            profit: weekProfit || Math.random() * 6000 + 6000,
-          };
-        });
-
-        setTrend(trendData);
-      } catch (err) {
-        console.error("Failed to load reports data:", err);
-        toast.error("Could not load reports data");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const totalRevenue = orders.reduce((sum, o) => sum + o.amount, 0);
-  const totalProfit = products.reduce((sum, p) => {
-    const { profit } = calculateProductProfit(p);
-    return sum + profit;
-  }, 0);
-  const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
-  const roas = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : "0";
-  const returnRate =
-    orders.length > 0
-      ? ((orders.filter((o) => o.status === "Returned").length / orders.length) * 100).toFixed(1)
-      : "0";
-
-  const productReports = products.map((p) => {
-    const { profit, margin } = calculateProductProfit(p);
-    return {
-      Product: p.name,
-      Price: p.price,
-      Profit: profit.toFixed(2),
-      Margin: margin.toFixed(1) + "%",
-      Status: margin >= 15 ? "Winning" : margin >= 0 ? "Break-even" : "Losing",
-    };
-  });
-
-  const campaignReports = campaigns.map((c) => {
-    const campaignRoas = c.spend > 0 ? (c.revenue / c.spend).toFixed(2) : "0";
-    const cpa = c.orders_count > 0 ? (c.spend / c.orders_count).toFixed(2) : "0";
-    return {
-      Campaign: c.name,
-      Platform: c.platform,
-      Spend: c.spend.toFixed(2),
-      Revenue: c.revenue.toFixed(2),
-      Orders: c.orders_count,
-      ROAS: campaignRoas + "x",
-      CPA: cpa,
-    };
-  });
-
-  const handleExport = async (format: "csv" | "json" | "pdf") => {
-    setExporting(true);
+  const loadData = async () => {
+    setLoading(true)
     try {
-      if (format === "csv") {
-        exportToCSV(productReports, "product-profitability");
-      } else if (format === "json") {
-        exportToJSON(
-          {
-            summary: {
-              totalRevenue,
-              totalProfit,
-              totalSpend,
-              roas,
-              returnRate,
-            },
-            products: productReports,
-            campaigns: campaignReports,
-          },
-          "profitability-report"
-        );
-      } else if (format === "pdf") {
-        toast.info("PDF export coming soon");
-      }
-      toast.success(`Exported as ${format.toUpperCase()}`);
-    } catch (err) {
-      console.error("Export failed:", err);
-      toast.error("Export failed");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-700" />
-      </div>
-    );
+      const [p, o, c] = await Promise.all([productsApi.list(), ordersApi.list(), campaignsApi.list()])
+      setProducts(p); setOrders(o); setCampaigns(c)
+    } catch (err: any) { setError(err.message) }
+    finally { setLoading(false) }
   }
 
+  const filterByDate = (items: any[]) => {
+    if (dateRange === 'all') return items
+    const now = new Date()
+    const days = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : 90
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+    return items.filter(item => new Date(item.created_at) >= cutoff)
+  }
+
+  const filteredOrders = filterByDate(orders)
+  const filteredCampaigns = filterByDate(campaigns)
+
+  const productReport = products.map(p => {
+    const cost = p.cogs + p.shipping + p.return_cost + p.cod + p.packaging + p.vat
+    const profit = p.price - cost
+    const margin = p.price > 0 ? (profit / p.price) * 100 : 0
+    const beRoas = profit > 0 ? (p.price / profit).toFixed(2) : '∞'
+    const productOrders = filteredOrders.filter(o => o.product_id === p.id && o.status === 'delivered')
+    const totalSold = productOrders.length
+    const totalRevenue = productOrders.reduce((sum, o) => sum + o.amount, 0)
+    return { name: p.name, sku: p.sku, price: p.price, cost, profit, margin, beRoas, totalSold, totalRevenue }
+  }).sort((a, b) => b.profit - a.profit)
+
+  const campaignReport = filteredCampaigns.map(c => ({
+    name: c.name, platform: c.platform, spend: c.spend, revenue: c.revenue,
+    roas: c.spend > 0 ? (c.revenue / c.spend).toFixed(2) : '0.00',
+    cpa: c.orders_count > 0 ? (c.spend / c.orders_count).toFixed(2) : '0.00',
+    orders: c.orders_count, status: c.status
+  })).sort((a, b) => b.revenue - a.revenue)
+
+  const exportCSV = (data: any[], filename: string) => {
+    if (data.length === 0) return
+    const headers = Object.keys(data[0])
+    const csv = [headers.join(','), ...data.map(row => headers.map(h => {
+      const val = row[h]
+      return typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+    }).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportJSON = (data: any[], filename: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${filename}_${new Date().toISOString().split('T')[0]}.json`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const totalProfit = productReport.reduce((sum, p) => sum + (p.profit * p.totalSold), 0)
+  const totalRevenue = productReport.reduce((sum, p) => sum + p.totalRevenue, 0)
+  const totalCampaignSpend = campaignReport.reduce((sum, c) => sum + c.spend, 0)
+  const totalCampaignRevenue = campaignReport.reduce((sum, c) => sum + c.revenue, 0)
+
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>
-            Reports
-          </h1>
-          <p className="text-slate-500 text-sm">Profitability summaries across products, campaigns, and time.</p>
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div><h1 className="text-3xl font-bold text-slate-900">Reports</h1><p className="text-slate-500 mt-1">Profitability summaries and analytics</p></div>
+        <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm">
+          <option value="all">All Time</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+          <option value="90days">Last 90 Days</option>
+        </select>
+      </div>
+
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2"><BarChart3 className="w-5 h-5 text-blue-600" /><span className="text-sm text-slate-500">Total Profit</span></div>
+          <p className="text-2xl font-bold text-slate-900">AED {totalProfit.toLocaleString()}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            className="border-slate-200"
-            onClick={() => handleExport("csv")}
-            disabled={exporting}
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-1" /> CSV
-          </Button>
-          <Button
-            variant="outline"
-            className="border-slate-200"
-            onClick={() => handleExport("json")}
-            disabled={exporting}
-          >
-            <FileText className="w-4 h-4 mr-1" /> JSON
-          </Button>
-          <Button
-            variant="outline"
-            className="border-slate-200"
-            onClick={() => handleExport("pdf")}
-            disabled={exporting}
-          >
-            <FileType className="w-4 h-4 mr-1" /> PDF
-          </Button>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2"><FileText className="w-5 h-5 text-green-600" /><span className="text-sm text-slate-500">Total Revenue</span></div>
+          <p className="text-2xl font-bold text-slate-900">AED {totalRevenue.toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2"><Calendar className="w-5 h-5 text-purple-600" /><span className="text-sm text-slate-500">Ad ROAS</span></div>
+          <p className="text-2xl font-bold text-slate-900">{totalCampaignSpend > 0 ? (totalCampaignRevenue / totalCampaignSpend).toFixed(2) : '0.00'}x</p>
         </div>
       </div>
 
-      <Tabs defaultValue="daily">
-        <TabsList className="bg-white border border-slate-200">
-          <TabsTrigger value="daily">Daily</TabsTrigger>
-          <TabsTrigger value="weekly">Weekly</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly</TabsTrigger>
-        </TabsList>
-
-        {(["daily", "weekly", "monthly"] as const).map((k) => (
-          <TabsContent key={k} value={k} className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Summary label="Revenue" value={`AED ${totalRevenue.toLocaleString()}`} tip={tips.revenue} delta="+12.4%" color="blue" />
-              <Summary label="Net Profit" value={`AED ${totalProfit.toLocaleString()}`} tip={tips.netProfit} delta="+18.4%" color="emerald" />
-              <Summary label="ROAS" value={`${roas}x`} tip={tips.roas} delta="+0.21" color="emerald" />
-              <Summary label="Return Rate" value={`${returnRate}%`} tip={tips.returnRate} delta="-0.6%" color="orange" />
-            </div>
-
-            <Card className="p-5 rounded-2xl border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-slate-900 font-semibold">Profit Summary</div>
-                  <div className="text-xs text-slate-500">Comparing revenue vs net profit</div>
-                </div>
-                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-50">
-                  {totalProfit > 0 ? "Healthy" : "Needs Attention"}
-                </Badge>
-              </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-                    <YAxis stroke="#94a3b8" fontSize={12} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <Line type="monotone" dataKey="revenue" stroke="#1d4ed8" strokeWidth={2.5} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="profit" stroke="#059669" strokeWidth={2.5} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card className="p-5 rounded-2xl border-slate-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <Table className="w-4 h-4 text-slate-600" />
-                  <div className="text-slate-900 font-semibold">Product Profitability</div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className="text-left py-2 px-2 text-slate-600">Product</th>
-                        <th className="text-right py-2 px-2 text-slate-600">Profit</th>
-                        <th className="text-right py-2 px-2 text-slate-600">Margin</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {productReports.slice(0, 5).map((p) => (
-                        <tr key={p.Product} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-2 px-2 text-slate-900">{p.Product}</td>
-                          <td className="text-right py-2 px-2 font-medium text-emerald-700">AED {p.Profit}</td>
-                          <td className="text-right py-2 px-2 text-slate-600">{p.Margin}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-
-              <Card className="p-5 rounded-2xl border-slate-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <Table className="w-4 h-4 text-slate-600" />
-                  <div className="text-slate-900 font-semibold">Campaign Performance</div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className="text-left py-2 px-2 text-slate-600">Campaign</th>
-                        <th className="text-right py-2 px-2 text-slate-600">ROAS</th>
-                        <th className="text-right py-2 px-2 text-slate-600">CPA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {campaignReports.slice(0, 5).map((c) => (
-                        <tr key={c.Campaign} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-2 px-2 text-slate-900">{c.Campaign}</td>
-                          <td className="text-right py-2 px-2 font-medium text-blue-700">{c.ROAS}</td>
-                          <td className="text-right py-2 px-2 text-slate-600">AED {c.CPA}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
-    </div>
-  );
-}
-
-function Summary({
-  label,
-  value,
-  tip,
-  delta,
-  color,
-}: {
-  label: string;
-  value: string;
-  tip: { title: string; content: string };
-  delta: string;
-  color: string;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    orange: "bg-orange-50 text-orange-700",
-  };
-
-  return (
-    <Card className={`p-4 rounded-xl border-0 ${colorMap[color]}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
-            {label}
-            <InfoTip {...tip} />
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Product Profitability</h3>
+          <div className="flex gap-2">
+            <button onClick={() => exportCSV(productReport, 'product_report')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><Download className="w-3.5 h-3.5" />CSV</button>
+            <button onClick={() => exportJSON(productReport, 'product_report')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><Download className="w-3.5 h-3.5" />JSON</button>
           </div>
-          <div className="text-lg font-bold">{value}</div>
         </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Product</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Price</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Cost</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Profit</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Margin</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">BE ROAS</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Sold</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Revenue</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {productReport.map((p, i) => (
+                <tr key={i} className="hover:bg-slate-50/50">
+                  <td className="px-4 py-3"><p className="font-medium text-slate-900">{p.name}</p><p className="text-xs text-slate-500">{p.sku}</p></td>
+                  <td className="px-4 py-3 text-right text-sm">AED {p.price.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-600">AED {p.cost.toFixed(2)}</td>
+                  <td className={`px-4 py-3 text-right text-sm font-medium ${p.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>AED {p.profit.toFixed(2)}</td>
+                  <td className={`px-4 py-3 text-right text-sm font-medium ${p.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.margin.toFixed(1)}%</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-600">{p.beRoas}x</td>
+                  <td className="px-4 py-3 text-right text-sm">{p.totalSold}</td>
+                  <td className="px-4 py-3 text-right text-sm font-medium">AED {p.totalRevenue.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {productReport.length === 0 && <div className="text-center py-8 text-slate-400">No products to report</div>}
       </div>
-      <div className="text-xs opacity-70 mt-2">{delta}</div>
-    </Card>
-  );
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Campaign Performance</h3>
+          <div className="flex gap-2">
+            <button onClick={() => exportCSV(campaignReport, 'campaign_report')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><Download className="w-3.5 h-3.5" />CSV</button>
+            <button onClick={() => exportJSON(campaignReport, 'campaign_report')} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><Download className="w-3.5 h-3.5" />JSON</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Campaign</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Platform</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Spend</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Revenue</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">ROAS</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">CPA</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Orders</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {campaignReport.map((c, i) => (
+                <tr key={i} className="hover:bg-slate-50/50">
+                  <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600 capitalize">{c.platform}</td>
+                  <td className="px-4 py-3 text-right text-sm text-red-600">AED {c.spend.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-sm text-green-600">AED {c.revenue.toFixed(2)}</td>
+                  <td className={`px-4 py-3 text-right text-sm font-semibold ${parseFloat(c.roas) >= 2 ? 'text-green-600' : parseFloat(c.roas) >= 1 ? 'text-yellow-600' : 'text-red-600'}`}>{c.roas}x</td>
+                  <td className="px-4 py-3 text-right text-sm">AED {c.cpa}</td>
+                  <td className="px-4 py-3 text-right text-sm">{c.orders}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {campaignReport.length === 0 && <div className="text-center py-8 text-slate-400">No campaigns to report</div>}
+      </div>
+    </div>
+  )
 }
