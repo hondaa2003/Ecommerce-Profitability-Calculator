@@ -1,422 +1,206 @@
-import { useEffect, useState } from "react";
-import { Card } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
-import { InfoTip } from "../InfoTip";
-import { tips } from "../glossary";
-import { Loader2, Plug, Plus, Trash2, Edit3, AlertCircle } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { api } from "../api";
-import { toast } from "sonner";
-import { useI18n } from "../i18n";
-
-interface Campaign {
-  id: string;
-  name: string;
-  platform: string;
-  spend: number;
-  orders_count?: number;
-  revenue: number;
-}
-
-const platformColors: Record<string, string> = {
-  Facebook: "bg-blue-50 text-blue-700 border-blue-100",
-  TikTok: "bg-slate-900 text-white border-slate-900",
-  Google: "bg-orange-50 text-orange-700 border-orange-100",
-  Instagram: "bg-pink-50 text-pink-700 border-pink-100",
-  LinkedIn: "bg-blue-50 text-blue-700 border-blue-100",
-};
+// src/components/pages/Campaigns.tsx
+import { useEffect, useState } from 'react'
+import { campaignsApi } from '../../lib/supabase'
+import { Plus, Target, TrendingUp, DollarSign, Trash2, BarChart3 } from 'lucide-react'
 
 export function Campaigns() {
-  const { t } = useI18n();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [platform, setPlatform] = useState("Facebook");
-  const [spend, setSpend] = useState(0);
-  const [ordersCount, setOrdersCount] = useState(0);
-  const [revenue, setRevenue] = useState(0);
+  const [campaigns, setCampaigns] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const items = await api.list<Campaign>("campaigns");
-        setCampaigns(items);
-      } catch (err) {
-        console.error("Failed to load campaigns:", err);
-        toast.error("Could not load campaigns from server");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const [formData, setFormData] = useState({
+    name: '', platform: 'meta', spend: 0, orders_count: 0, revenue: 0,
+    start_date: '', end_date: '', status: 'active' as 'active' | 'paused' | 'ended'
+  })
 
-  const totals = campaigns.reduce(
-    (a, c) => ({
-      spend: a.spend + c.spend,
-      orders: a.orders + (c.orders_count || 0),
-      revenue: a.revenue + c.revenue,
-    }),
-    { spend: 0, orders: 0, revenue: 0 }
-  );
+  useEffect(() => { loadCampaigns() }, [])
 
-  const totalRoas = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) : "0";
-  const totalCpa = totals.orders > 0 ? (totals.spend / totals.orders).toFixed(0) : "0";
-  const mer = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) : "0";
+  const loadCampaigns = async () => {
+    setLoading(true); setError('')
+    try { const data = await campaignsApi.list(); setCampaigns(data) }
+    catch (err: any) { setError(err.message) }
+    finally { setLoading(false) }
+  }
 
-  const addCampaign = async () => {
-    if (!name) {
-      toast.error("Campaign name is required");
-      return;
-    }
-    setSaving(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setFormError('')
+    if (!formData.name.trim()) { setFormError('Campaign name is required'); return }
+    if (formData.spend < 0) { setFormError('Spend cannot be negative'); return }
+
     try {
-      if (editingId) {
-        const item = await api.update<Campaign>("campaigns", editingId, {
-          name,
-          platform,
-          spend,
-          orders_count: ordersCount,
-          revenue,
-        });
-        setCampaigns((c) => c.map((x) => (x.id === editingId ? item : x)));
-        toast.success("Campaign updated");
-      } else {
-        const item = await api.create<Campaign>("campaigns", {
-          name,
-          platform,
-          spend,
-          orders_count: ordersCount,
-          revenue,
-        });
-        setCampaigns((c) => [item, ...c]);
-        toast.success("Campaign saved");
-      }
-      resetForm();
-      setOpen(false);
-    } catch (err) {
-      console.error("Failed to save campaign:", err);
-      toast.error("Could not save campaign");
-    } finally {
-      setSaving(false);
-    }
-  };
+      await campaignsApi.create(formData)
+      setShowForm(false)
+      setFormData({ name: '', platform: 'meta', spend: 0, orders_count: 0, revenue: 0, start_date: '', end_date: '', status: 'active' })
+      loadCampaigns()
+    } catch (err: any) { setFormError(err.message) }
+  }
 
-  const deleteCampaign = async (id: string) => {
-    const previous = campaigns;
-    setCampaigns((arr) => arr.filter((x) => x.id !== id));
-    try {
-      await api.remove("campaigns", id);
-    } catch (err) {
-      console.error("Failed to delete campaign:", err);
-      toast.error("Could not delete campaign");
-      setCampaigns(previous);
-    }
-  };
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this campaign?')) return
+    try { await campaignsApi.remove(id); loadCampaigns() }
+    catch (err: any) { setError(err.message) }
+  }
 
-  const startEdit = (campaign: Campaign) => {
-    setName(campaign.name);
-    setPlatform(campaign.platform);
-    setSpend(campaign.spend);
-    setOrdersCount(campaign.orders_count || 0);
-    setRevenue(campaign.revenue);
-    setEditingId(campaign.id);
-    setOpen(true);
-  };
+  const calculateRoas = (campaign: any) => campaign.spend > 0 ? (campaign.revenue / campaign.spend).toFixed(2) : '0.00'
+  const calculateCpa = (campaign: any) => campaign.orders_count > 0 ? (campaign.spend / campaign.orders_count).toFixed(2) : '0.00'
 
-  const resetForm = () => {
-    setName("");
-    setPlatform("Facebook");
-    setSpend(0);
-    setOrdersCount(0);
-    setRevenue(0);
-    setEditingId(null);
-  };
+  const getPlatformIcon = (platform: string) => {
+    const icons: Record<string, string> = { meta: '📘', google: '🔍', tiktok: '🎵', snapchat: '👻', other: '📢' }
+    return icons[platform] || '📢'
+  }
 
-  const closeDialog = () => {
-    setOpen(false);
-    resetForm();
-  };
-
-  const chartData = campaigns.slice(0, 5).map((c) => ({
-    name: c.name.slice(0, 10),
-    spend: c.spend,
-    revenue: c.revenue,
-  }));
+  const totalSpend = campaigns.reduce((sum, c) => sum + (c.spend || 0), 0)
+  const totalRevenue = campaigns.reduce((sum, c) => sum + (c.revenue || 0), 0)
+  const totalOrders = campaigns.reduce((sum, c) => sum + (c.orders_count || 0), 0)
+  const overallRoas = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : '0.00'
+  const overallCpa = totalOrders > 0 ? (totalSpend / totalOrders).toFixed(2) : '0.00'
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div>
-        <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>
-          Campaign Tracking
-        </h1>
-        <p className="text-slate-500 text-sm">Log ad spend manually today, connect APIs tomorrow.</p>
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div><h1 className="text-3xl font-bold text-slate-900">Campaigns</h1><p className="text-slate-500 mt-1">Track ad spend and measure ROI</p></div>
+        <button onClick={() => { setShowForm(!showForm); if (showForm) { setFormData({ name: '', platform: 'meta', spend: 0, orders_count: 0, revenue: 0, start_date: '', end_date: '', status: 'active' }); setFormError('') } }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+          <Plus className="w-4 h-4" />{showForm ? 'Cancel' : 'Add Campaign'}
+        </button>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Total Spend" value={`AED ${totals.spend.toLocaleString()}`} tip={tips.adSpend} color="orange" />
-        <KpiCard label="Revenue" value={`AED ${totals.revenue.toLocaleString()}`} tip={tips.revenue} color="blue" />
-        <KpiCard label="ROAS" value={`${totalRoas}x`} tip={tips.roas} color="emerald" />
-        <KpiCard label="CPA" value={`AED ${totalCpa}`} tip={tips.cpa} color="blue" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-50 rounded-lg"><DollarSign className="w-5 h-5 text-red-600" /></div>
+            <div><p className="text-sm text-slate-500">Total Spend</p><p className="text-xl font-bold text-slate-900">AED {totalSpend.toLocaleString()}</p></div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-50 rounded-lg"><TrendingUp className="w-5 h-5 text-green-600" /></div>
+            <div><p className="text-sm text-slate-500">Total Revenue</p><p className="text-xl font-bold text-slate-900">AED {totalRevenue.toLocaleString()}</p></div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-lg"><Target className="w-5 h-5 text-blue-600" /></div>
+            <div><p className="text-sm text-slate-500">Overall ROAS</p><p className="text-xl font-bold text-slate-900">{overallRoas}x</p></div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-50 rounded-lg"><BarChart3 className="w-5 h-5 text-purple-600" /></div>
+            <div><p className="text-sm text-slate-500">Avg CPA</p><p className="text-xl font-bold text-slate-900">AED {overallCpa}</p></div>
+          </div>
+        </div>
       </div>
 
-      {/* API Integrations */}
-      <Card className="p-6 rounded-2xl border-slate-200 bg-purple-50 border-purple-100">
-        <div className="flex items-start gap-4">
-          <AlertCircle className="w-5 h-5 text-purple-700 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-purple-900 mb-2">Connect Ad Platforms</h3>
-            <p className="text-sm text-purple-800 mb-4">
-              Automatically sync ad spend and performance data. Coming soon: Meta Ads, Google Ads, TikTok Ads, LinkedIn Ads
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-purple-200 text-purple-700 hover:bg-purple-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> Meta Ads
-              </Button>
-              <Button variant="outline" className="border-purple-200 text-purple-700 hover:bg-purple-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> Google Ads
-              </Button>
-              <Button variant="outline" className="border-purple-200 text-purple-700 hover:bg-purple-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> TikTok Ads
-              </Button>
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
+
+      {showForm && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-4">Add New Campaign</h2>
+          {formError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{formError}</div>}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Campaign Name <span className="text-red-500">*</span></label>
+              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Summer Sale 2024" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" required />
             </div>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Platform</label>
+              <select value={formData.platform} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none">
+                <option value="meta">Meta (Facebook/Instagram)</option>
+                <option value="google">Google Ads</option>
+                <option value="tiktok">TikTok Ads</option>
+                <option value="snapchat">Snapchat Ads</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Ad Spend (AED)</label>
+              <input type="number" step="0.01" min="0" value={formData.spend} onChange={(e) => setFormData({ ...formData, spend: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Orders Generated</label>
+              <input type="number" min="0" value={formData.orders_count} onChange={(e) => setFormData({ ...formData, orders_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Revenue Generated (AED)</label>
+              <input type="number" step="0.01" min="0" value={formData.revenue} onChange={(e) => setFormData({ ...formData, revenue: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+              <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none">
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="ended">Ended</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Start Date</label>
+              <input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">End Date</label>
+              <input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" />
+            </div>
+            <div className="md:col-span-2 flex gap-3">
+              <button type="submit" className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">Add Campaign</button>
+              <button type="button" onClick={() => { setShowForm(false); setFormError('') }} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancel</button>
+            </div>
+          </form>
         </div>
-      </Card>
-
-      {/* Manual Entry */}
-      <Card className="p-5 rounded-2xl border-slate-200">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-slate-900 font-semibold">Manual Campaign Entry</div>
-            <div className="text-xs text-slate-500">Add campaign data manually</div>
-          </div>
-          <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-700 hover:bg-blue-800">
-                <Plus className="w-4 h-4 mr-1" /> Add Campaign
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Edit Campaign" : "Add New Campaign"}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div>
-                  <Label className="text-slate-700 mb-1 block font-medium">Campaign Name</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Summer Sale 2024"
-                    className="bg-slate-50 border-slate-200"
-                  />
-                </div>
-                <div>
-                  <Label className="text-slate-700 mb-1 block font-medium">Platform</Label>
-                  <Select value={platform} onValueChange={setPlatform}>
-                    <SelectTrigger className="bg-slate-50 border-slate-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Facebook">Facebook</SelectItem>
-                      <SelectItem value="Instagram">Instagram</SelectItem>
-                      <SelectItem value="TikTok">TikTok</SelectItem>
-                      <SelectItem value="Google">Google Ads</SelectItem>
-                      <SelectItem value="LinkedIn">LinkedIn</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-slate-700 mb-1 block font-medium">Ad Spend (AED)</Label>
-                  <Input
-                    type="number"
-                    value={spend}
-                    onChange={(e) => setSpend(Number(e.target.value))}
-                    placeholder="0"
-                    className="bg-slate-50 border-slate-200"
-                  />
-                </div>
-                <div>
-                  <Label className="text-slate-700 mb-1 block font-medium">Orders Generated</Label>
-                  <Input
-                    type="number"
-                    value={ordersCount}
-                    onChange={(e) => setOrdersCount(Number(e.target.value))}
-                    placeholder="0"
-                    className="bg-slate-50 border-slate-200"
-                  />
-                </div>
-                <div>
-                  <Label className="text-slate-700 mb-1 block font-medium">Revenue Generated (AED)</Label>
-                  <Input
-                    type="number"
-                    value={revenue}
-                    onChange={(e) => setRevenue(Number(e.target.value))}
-                    placeholder="0"
-                    className="bg-slate-50 border-slate-200"
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={closeDialog}>
-                    Cancel
-                  </Button>
-                  <Button className="bg-blue-700 hover:bg-blue-800" onClick={addCampaign} disabled={saving}>
-                    {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                    {editingId ? "Update Campaign" : "Save Campaign"}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </Card>
-
-      {/* Chart */}
-      {chartData.length > 0 && (
-        <Card className="p-5 rounded-2xl border-slate-200">
-          <div className="text-slate-900 font-semibold mb-4">Spend vs Revenue</div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="name" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                }}
-              />
-              <Bar dataKey="spend" fill="#f97316" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="revenue" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
       )}
 
-      {/* Table */}
-      <Card className="rounded-2xl border-slate-200 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
-              <TableHead>Campaign</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead>Spend</TableHead>
-              <TableHead>Revenue</TableHead>
-              <TableHead>Orders</TableHead>
-              <TableHead>ROAS</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-10 text-slate-400">
-                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t("empty.loading")}…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && campaigns.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-16">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <div>
-                      <div className="text-slate-900 mb-1 font-medium">No campaigns yet</div>
-                      <div className="text-sm text-slate-500">Start by adding your first campaign</div>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              campaigns.map((c) => {
-                const campaignRoas = c.spend > 0 ? (c.revenue / c.spend).toFixed(2) : "0";
-                const roasStatus =
-                  parseFloat(campaignRoas) >= 3
-                    ? "bg-emerald-50 text-emerald-700"
-                    : parseFloat(campaignRoas) >= 2
-                      ? "bg-blue-50 text-blue-700"
-                      : "bg-orange-50 text-orange-700";
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Campaign</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Platform</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Spend</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Revenue</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">ROAS</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">CPA</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Status</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {campaigns.map((campaign) => {
+                const roas = calculateRoas(campaign); const cpa = calculateCpa(campaign)
                 return (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium text-slate-900">{c.name}</TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`${platformColors[c.platform] || platformColors.Facebook} hover:${platformColors[c.platform]} border`}
-                      >
-                        {c.platform}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>AED {c.spend.toLocaleString()}</TableCell>
-                    <TableCell className="font-medium">AED {c.revenue.toLocaleString()}</TableCell>
-                    <TableCell>{c.orders_count || 0}</TableCell>
-                    <TableCell>
-                      <Badge className={`${roasStatus} hover:${roasStatus} border`}>{campaignRoas}x</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-500 hover:text-blue-700"
-                        onClick={() => startEdit(c)}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-500 hover:text-red-700"
-                        onClick={() => deleteCampaign(c.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
+                  <tr key={campaign.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{getPlatformIcon(campaign.platform)}</span>
+                        <div>
+                          <p className="font-medium text-slate-900">{campaign.name}</p>
+                          <p className="text-xs text-slate-500">{campaign.start_date && new Date(campaign.start_date).toLocaleDateString()}{campaign.end_date && ` - ${new Date(campaign.end_date).toLocaleDateString()}`}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 capitalize">{campaign.platform}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-red-600">AED {campaign.spend?.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-green-600">AED {campaign.revenue?.toFixed(2)}</td>
+                    <td className={`px-4 py-3 text-right text-sm font-semibold ${parseFloat(roas) >= 2 ? 'text-green-600' : parseFloat(roas) >= 1 ? 'text-yellow-600' : 'text-red-600'}`}>{roas}x</td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-600">AED {cpa}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${campaign.status === 'active' ? 'bg-green-100 text-green-700' : campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'}`}>{campaign.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => handleDelete(campaign.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                    </td>
+                  </tr>
+                )
               })}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  tip,
-  color = "blue",
-}: {
-  label: string;
-  value: string;
-  tip: { title: string; content: string };
-  color?: string;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    orange: "bg-orange-50 text-orange-700",
-  };
-
-  return (
-    <Card className={`p-4 rounded-xl border-0 ${colorMap[color]}`}>
-      <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
-        {label}
-        <InfoTip {...tip} />
+            </tbody>
+          </table>
+        </div>
+        {campaigns.length === 0 && !loading && (
+          <div className="text-center py-12"><Target className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p className="text-slate-500 font-medium">No campaigns yet</p><p className="text-sm text-slate-400 mt-1">Add your first campaign to track ad performance</p></div>
+        )}
       </div>
-      <div className="text-2xl font-bold">{value}</div>
-    </Card>
-  );
+    </div>
+  )
 }
