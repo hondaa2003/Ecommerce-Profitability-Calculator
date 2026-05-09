@@ -1,4 +1,6 @@
-import { projectId, publicAnonKey } from "../../../utils/supabase/info.tsx";
+
+const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || "cjteefcgtjvgxephwznm";
+const publicAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdGVlZmNndGp2Z3hlcGh3em5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTYxNTksImV4cCI6MjA5MzczMjE1OX0.U9BvJx4q_3Ah_G1BbCHGgQ2qjCW6ooG5YJQKgvFKJwY";
 
 const BASE = `https://${projectId}.supabase.co/functions/v1/make-server-2d50666c`;
 
