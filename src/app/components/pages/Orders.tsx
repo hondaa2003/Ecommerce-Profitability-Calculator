@@ -1,354 +1,197 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
-import { toast } from "sonner";
-import { Card } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
-import { InfoTip } from "../InfoTip";
-import { tips } from "../glossary";
-import { Loader2, Plug, Plus, Trash2, Edit3, AlertCircle } from "lucide-react";
-import { useI18n } from "../i18n";
-
-type Status = "Delivered" | "Returned" | "Pending";
-
-interface Order {
-  id: string;
-  product_id?: string;
-  customer_name?: string;
-  amount: number;
-  status: Status;
-  created_at?: string;
-}
-
-const statusBadge: Record<Status, string> = {
-  Delivered: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  Returned: "bg-orange-50 text-orange-700 border-orange-100",
-  Pending: "bg-blue-50 text-blue-700 border-blue-100",
-};
+// src/components/pages/Orders.tsx
+import { useEffect, useState } from 'react'
+import { ordersApi, productsApi } from '../../lib/supabase'
+import { Plus, ShoppingCart, CheckCircle, Clock, XCircle, Trash2 } from 'lucide-react'
 
 export function Orders() {
-  const { t } = useI18n();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [productId, setProductId] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [status, setStatus] = useState<Status>("Pending");
+  const [orders, setOrders] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const items = await api.list<Order>("orders");
-        setOrders(items);
-      } catch (err) {
-        console.error("Failed to load orders:", err);
-        toast.error("Could not load orders from server");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const [formData, setFormData] = useState({
+    product_id: '', customer_name: '', amount: 0,
+    status: 'pending' as 'pending' | 'delivered' | 'returned', notes: ''
+  })
 
-  const total = orders.length;
-  const delivered = orders.filter((o) => o.status === "Delivered").length;
-  const returned = orders.filter((o) => o.status === "Returned").length;
-  const pending = orders.filter((o) => o.status === "Pending").length;
-  const successRate = total ? ((delivered / total) * 100).toFixed(1) : "0";
-  const returnRate = total ? ((returned / total) * 100).toFixed(1) : "0";
+  useEffect(() => { loadData() }, [])
 
-  const addOrder = async () => {
-    if (!amount) {
-      toast.error("Amount is required");
-      return;
-    }
-    setSaving(true);
+  const loadData = async () => {
+    setLoading(true); setError('')
     try {
-      if (editingId) {
-        const item = await api.update<Order>("orders", editingId, {
-          product_id: productId || null,
-          customer_name: customerName || null,
-          amount,
-          status,
-        });
-        setOrders((o) => o.map((x) => (x.id === editingId ? item : x)));
-        toast.success("Order updated");
-      } else {
-        const item = await api.create<Order>("orders", {
-          product_id: productId || null,
-          customer_name: customerName || null,
-          amount,
-          status,
-        });
-        setOrders((o) => [item, ...o]);
-        toast.success("Order saved");
-      }
-      resetForm();
-      setOpen(false);
-    } catch (err) {
-      console.error("Failed to save order:", err);
-      toast.error("Could not save order");
-    } finally {
-      setSaving(false);
-    }
-  };
+      const [ordersData, productsData] = await Promise.all([ordersApi.list(), productsApi.list()])
+      setOrders(ordersData); setProducts(productsData)
+    } catch (err: any) { setError(err.message) }
+    finally { setLoading(false) }
+  }
 
-  const deleteOrder = async (id: string) => {
-    const previous = orders;
-    setOrders((arr) => arr.filter((x) => x.id !== id));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setFormError('')
+    if (!formData.product_id) { setFormError('Please select a product'); return }
+    if (!formData.customer_name.trim()) { setFormError('Customer name is required'); return }
+    if (formData.amount <= 0) { setFormError('Amount must be greater than 0'); return }
+
     try {
-      await api.remove("orders", id);
-    } catch (err) {
-      console.error("Failed to delete order:", err);
-      toast.error("Could not delete order");
-      setOrders(previous);
+      await ordersApi.create(formData)
+      setShowForm(false); setFormData({ product_id: '', customer_name: '', amount: 0, status: 'pending', notes: '' })
+      loadData()
+    } catch (err: any) { setFormError(err.message) }
+  }
+
+  const handleStatusChange = async (id: string, status: string) => {
+    try { await ordersApi.update(id, { status: status as any }); loadData() }
+    catch (err: any) { setError(err.message) }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this order?')) return
+    try { await ordersApi.remove(id); loadData() }
+    catch (err: any) { setError(err.message) }
+  }
+
+  const stats = {
+    total: orders.length, delivered: orders.filter(o => o.status === 'delivered').length,
+    pending: orders.filter(o => o.status === 'pending').length,
+    returned: orders.filter(o => o.status === 'returned').length,
+    revenue: orders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + (o.amount || 0), 0),
+    returnRate: orders.length > 0 ? (orders.filter(o => o.status === 'returned').length / orders.length) * 100 : 0
+  }
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'delivered': return 'bg-green-100 text-green-700 border-green-200'
+      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      case 'returned': return 'bg-red-100 text-red-700 border-red-200'
+      default: return 'bg-slate-100 text-slate-700'
     }
-  };
-
-  const startEdit = (order: Order) => {
-    setProductId(order.product_id || "");
-    setCustomerName(order.customer_name || "");
-    setAmount(order.amount);
-    setStatus(order.status);
-    setEditingId(order.id);
-    setOpen(true);
-  };
-
-  const resetForm = () => {
-    setProductId("");
-    setCustomerName("");
-    setAmount(0);
-    setStatus("Pending");
-    setEditingId(null);
-  };
-
-  const closeDialog = () => {
-    setOpen(false);
-    resetForm();
-  };
+  }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div>
-        <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>
-          Orders & Fulfillment
-        </h1>
-        <p className="text-slate-500 text-sm">Track delivery success, returns, and overall fulfillment health.</p>
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div><h1 className="text-3xl font-bold text-slate-900">Orders</h1><p className="text-slate-500 mt-1">Track and manage your orders</p></div>
+        <button onClick={() => { setShowForm(!showForm); if (showForm) { setFormData({ product_id: '', customer_name: '', amount: 0, status: 'pending', notes: '' }); setFormError('') } }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+          <Plus className="w-4 h-4" />{showForm ? 'Cancel' : 'Add Order'}
+        </button>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Mini label="Total Orders" value={total.toString()} tip={tips.orders} />
-        <Mini label="Delivered" value={delivered.toString()} tip={tips.delivered} color="emerald" />
-        <Mini label="Returned" value={returned.toString()} tip={tips.returnRate} color="orange" />
-        <Mini label="Pending" value={pending.toString()} tip={tips.pending} color="blue" />
-        <Mini label="Success Rate" value={`${successRate}%`} tip={tips.delivered} color="emerald" />
-        <Mini label="Return Rate" value={`${returnRate}%`} tip={tips.returnRate} color="orange" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total Orders" value={stats.total} icon={ShoppingCart} color="blue" />
+        <StatCard title="Delivered" value={stats.delivered} icon={CheckCircle} color="green" />
+        <StatCard title="Pending" value={stats.pending} icon={Clock} color="yellow" />
+        <StatCard title="Returned" value={stats.returned} icon={XCircle} color="red" />
       </div>
 
-      {/* Add Order Button */}
-      <div className="flex justify-between items-center">
-        <div></div>
-        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-700 hover:bg-blue-800">
-              <Plus className="w-4 h-4 mr-1" /> Add Order
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Order" : "Add New Order"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              <div>
-                <Label className="text-slate-700 mb-1 block font-medium">Product ID (Optional)</Label>
-                <Input
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  placeholder="e.g., product-123"
-                  className="bg-slate-50 border-slate-200"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-700 mb-1 block font-medium">Customer Name (Optional)</Label>
-                <Input
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g., Ahmed Al-Mansouri"
-                  className="bg-slate-50 border-slate-200"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-700 mb-1 block font-medium">Amount (AED)</Label>
-                <Input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value))}
-                  placeholder="0"
-                  className="bg-slate-50 border-slate-200"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-700 mb-1 block font-medium">Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
-                  <SelectTrigger className="bg-slate-50 border-slate-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                    <SelectItem value="Returned">Returned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={closeDialog}>
-                  Cancel
-                </Button>
-                <Button className="bg-blue-700 hover:bg-blue-800" onClick={addOrder} disabled={saving}>
-                  {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                  {editingId ? "Update Order" : "Save Order"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Store Integrations */}
-      <Card className="p-6 rounded-2xl border-slate-200 bg-blue-50 border-blue-100">
-        <div className="flex items-start gap-4">
-          <AlertCircle className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-blue-900 mb-2">Connect Your Store</h3>
-            <p className="text-sm text-blue-800 mb-4">
-              Automatically sync orders from your store. Coming soon: Shopify, Salla, Zid, WooCommerce
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> Shopify
-              </Button>
-              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> Salla
-              </Button>
-              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-100" disabled>
-                <Plug className="w-4 h-4 mr-1" /> Zid
-              </Button>
-            </div>
-          </div>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div><p className="text-sm text-slate-500">Total Revenue</p><p className="text-2xl font-bold text-slate-900">AED {stats.revenue.toLocaleString()}</p></div>
+          <div><p className="text-sm text-slate-500">Return Rate</p><p className={`text-2xl font-bold ${stats.returnRate < 10 ? 'text-green-600' : 'text-red-600'}`}>{stats.returnRate.toFixed(1)}%</p></div>
+          <div><p className="text-sm text-slate-500">Success Rate</p><p className="text-2xl font-bold text-blue-600">{stats.total > 0 ? ((stats.delivered / stats.total) * 100).toFixed(1) : 0}%</p></div>
         </div>
-      </Card>
+      </div>
 
-      {/* Orders Table */}
-      <Card className="rounded-2xl border-slate-200 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 text-slate-400">
-                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t("empty.loading")}…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && orders.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-slate-400" />
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
+
+      {showForm && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-4">Add New Order</h2>
+          {formError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{formError}</div>}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Product <span className="text-red-500">*</span></label>
+              <select value={formData.product_id} onChange={(e) => setFormData({ ...formData, product_id: e.target.value })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" required>
+                <option value="">Select a product</option>
+                {products.map(p => <option key={p.id} value={p.id}>{p.name} (AED {p.price})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer Name <span className="text-red-500">*</span></label>
+              <input type="text" value={formData.customer_name} onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })} placeholder="Customer name" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount (AED) <span className="text-red-500">*</span></label>
+              <input type="number" step="0.01" min="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Status <span className="text-red-500">*</span></label>
+              <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none">
+                <option value="pending">Pending</option>
+                <option value="delivered">Delivered</option>
+                <option value="returned">Returned</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Notes</label>
+              <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Optional notes..." rows={2} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none resize-none" />
+            </div>
+            <div className="md:col-span-2 flex gap-3">
+              <button type="submit" className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">Add Order</button>
+              <button type="button" onClick={() => { setShowForm(false); setFormError('') }} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Order ID</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Product</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Customer</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Amount</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Status</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {orders.map((order) => (
+                <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-4 py-3"><span className="text-sm font-mono font-medium text-slate-900">#{order.id.slice(0, 8).toUpperCase()}</span></td>
+                  <td className="px-4 py-3 text-sm text-slate-700">{order.products?.name || 'Unknown Product'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700">{order.customer_name}</td>
+                  <td className="px-4 py-3 text-right text-sm font-medium">AED {order.amount?.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center">
+                      <select value={order.status} onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                        className={`text-xs px-3 py-1.5 rounded-full border font-medium cursor-pointer outline-none transition-colors ${getStatusStyle(order.status)}`}>
+                        <option value="pending">Pending</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="returned">Returned</option>
+                      </select>
                     </div>
-                    <div>
-                      <div className="text-slate-900 mb-1 font-medium">No orders yet</div>
-                      <div className="text-sm text-slate-500">Start by adding your first order or connecting a store</div>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              orders.map((o) => (
-                <TableRow key={o.id}>
-                  <TableCell className="font-mono text-sm text-slate-900">{o.id.slice(0, 8)}</TableCell>
-                  <TableCell className="text-slate-600">{o.customer_name || "-"}</TableCell>
-                  <TableCell className="font-semibold">AED {o.amount}</TableCell>
-                  <TableCell>
-                    <Badge className={`${statusBadge[o.status]} hover:${statusBadge[o.status]} border`}>
-                      {o.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-slate-600">
-                    {o.created_at
-                      ? new Date(o.created_at).toLocaleDateString("ar-AE")
-                      : "Today"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-slate-500 hover:text-blue-700"
-                      onClick={() => startEdit(o)}
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-slate-500 hover:text-red-700"
-                      onClick={() => deleteOrder(o.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button onClick={() => handleDelete(order.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                  </td>
+                </tr>
               ))}
-          </TableBody>
-        </Table>
-      </Card>
+            </tbody>
+          </table>
+        </div>
+        {orders.length === 0 && !loading && (
+          <div className="text-center py-12"><ShoppingCart className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p className="text-slate-500 font-medium">No orders yet</p><p className="text-sm text-slate-400 mt-1">Add your first order to start tracking</p></div>
+        )}
+      </div>
     </div>
-  );
+  )
 }
 
-function Mini({
-  label,
-  value,
-  tip,
-  color = "blue",
-}: {
-  label: string;
-  value: string;
-  tip: { title: string; content: string };
-  color?: string;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    orange: "bg-orange-50 text-orange-700",
-  };
-
+function StatCard({ title, value, icon: Icon, color }: { title: string; value: number; icon: any; color: string }) {
+  const colors: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600', green: 'bg-green-50 text-green-600',
+    yellow: 'bg-yellow-50 text-yellow-600', red: 'bg-red-50 text-red-600'
+  }
   return (
-    <Card className={`p-4 rounded-xl border-0 ${colorMap[color]}`}>
-      <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
-        {label}
-        <InfoTip {...tip} />
+    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${colors[color]}`}><Icon className="w-5 h-5" /></div>
+        <div><p className="text-sm text-slate-500">{title}</p><p className="text-xl font-bold text-slate-900">{value}</p></div>
       </div>
-      <div className="text-2xl font-bold">{value}</div>
-    </Card>
-  );
+    </div>
+  )
 }
