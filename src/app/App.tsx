@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Landing } from "./components/Landing";
 import { AppShell } from "./components/AppShell";
 import { Auth } from "./components/Auth";
@@ -7,6 +7,53 @@ import { I18nProvider } from "./components/i18n";
 import { Toaster } from "sonner";
 import { getSupabase } from "./components/supabase-client";
 import { setAuthToken } from "./components/api";
+
+function AppRoutes({ session }: { session: any }) {
+  const navigate = useNavigate();
+
+  return (
+    <Routes>
+      <Route 
+        path="/" 
+        element={
+          session ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Landing onEnter={() => navigate("/auth")} />
+          )
+        } 
+      />
+      <Route 
+        path="/auth" 
+        element={
+          session ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Auth 
+              onAuthed={() => navigate("/dashboard")} 
+              onBack={() => navigate("/")} 
+            />
+          )
+        } 
+      />
+      <Route 
+        path="/*" 
+        element={
+          session ? (
+            <AppShell
+              onExit={async () => {
+                await getSupabase().auth.signOut();
+                navigate("/");
+              }}
+            />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        } 
+      />
+    </Routes>
+  );
+}
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -37,30 +84,7 @@ export default function App() {
     <I18nProvider>
       <BrowserRouter>
         <div className="min-h-screen bg-white">
-          <Routes>
-            <Route 
-              path="/" 
-              element={session ? <Navigate to="/dashboard" /> : <Landing onEnter={() => {}} />} 
-            />
-            <Route 
-              path="/auth" 
-              element={session ? <Navigate to="/dashboard" /> : <Auth onAuthed={() => {}} onBack={() => {}} />} 
-            />
-            <Route 
-              path="/*" 
-              element={
-                session ? (
-                  <AppShell
-                    onExit={async () => {
-                      await getSupabase().auth.signOut();
-                    }}
-                  />
-                ) : (
-                  <Navigate to="/" />
-                )
-              } 
-            />
-          </Routes>
+          <AppRoutes session={session} />
         </div>
       </BrowserRouter>
       <Toaster richColors position="top-right" />
