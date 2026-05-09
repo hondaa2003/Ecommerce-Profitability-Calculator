@@ -1,375 +1,177 @@
-import { useEffect, useMemo, useState } from "react";
-import { Card } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
-import { InfoTip } from "../InfoTip";
-import { tips } from "../glossary";
-import { Edit3, ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
-import { api } from "../api";
-import { toast } from "sonner";
-import { useI18n } from "../i18n";
-import { getSupabase } from "../supabase-client";
-
-interface ProductForm {
-  name: string;
-  image: string;
-  url: string;
-  sku: string;
-  cogs: number;
-  shipping: number;
-  returnCost: number;
-  cod: number;
-  packaging: number;
-  vat: number;
-  price: number;
-}
-
-function calculate(p: ProductForm) {
-  const vatAmount = (p.price * p.vat) / 100;
-  const totalCost = p.cogs + p.shipping + p.returnCost + p.cod + p.packaging + vatAmount;
-  const profit = p.price - totalCost;
-  const margin = p.price > 0 ? (profit / p.price) * 100 : 0;
-  const breakEvenRoas = profit > 0 ? p.price / profit : 0;
-  return { profit, margin, breakEvenRoas, totalCost };
-}
-
-function statusOf(margin: number): { label: string; classes: string } {
-  if (margin >= 15) return { label: "Winning", classes: "bg-emerald-50 text-emerald-700 border-emerald-100" };
-  if (margin >= 0) return { label: "Break-even", classes: "bg-blue-50 text-blue-700 border-blue-100" };
-  return { label: "Losing", classes: "bg-orange-50 text-orange-700 border-orange-100" };
-}
-
-const emptyForm: ProductForm = {
-  name: "", image: "", url: "", sku: "", cogs: 0, shipping: 0, returnCost: 0, cod: 0, packaging: 0, vat: 5, price: 0,
-};
-
-type Product = ProductForm & { id: string };
+// src/components/pages/Products.tsx
+import { useEffect, useState } from 'react'
+import { productsApi } from '../../lib/supabase'
+import { Plus, Pencil, Trash2, Package, ExternalLink, Calculator } from 'lucide-react'
 
 export function Products() {
-  const { t } = useI18n();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
+  const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
 
-  const calc = useMemo(() => calculate(form), [form]);
+  const [formData, setFormData] = useState({
+    name: '', sku: '', cogs: 0, shipping: 0, return_cost: 0,
+    cod: 0, packaging: 0, vat: 0, price: 0, url: ''
+  })
 
-  const set = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  useEffect(() => { loadProducts() }, [])
 
-  const numberInput = (k: keyof ProductForm) => (
-    <Input
-      type="number"
-      value={form[k] as number}
-      onChange={(e) => set(k, Number(e.target.value) as any)}
-      className="bg-slate-50 border-slate-200"
-    />
-  );
+  const loadProducts = async () => {
+    setLoading(true); setError('')
+    try { const data = await productsApi.list(); setProducts(data) }
+    catch (err: any) { setError(err.message) }
+    finally { setLoading(false) }
+  }
 
-  // Load products from server
-  useEffect(() => {
-    (async () => {
-      try {
-        const items = await api.list<Product>("products");
-        setProducts(items);
-      } catch (err) {
-        console.error("Failed to load products:", err);
-        toast.error("Could not load products from server");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setFormError('')
+    if (!formData.name.trim()) { setFormError('Product name is required'); return }
+    if (!formData.sku.trim()) { setFormError('SKU is required'); return }
+    if (formData.price <= 0) { setFormError('Price must be greater than 0'); return }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
     try {
-      const supabase = getSupabase();
-      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.name.split(".").pop()}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from("product-images")
-        .upload(fileName, file);
+      if (editingProduct) { await productsApi.update(editingProduct.id, formData) }
+      else { await productsApi.create(formData) }
+      setShowForm(false); setEditingProduct(null); resetForm(); loadProducts()
+    } catch (err: any) { setFormError(err.message) }
+  }
 
-      if (uploadError) throw uploadError;
+  const handleEdit = (product: any) => {
+    setEditingProduct(product)
+    setFormData({
+      name: product.name, sku: product.sku, cogs: product.cogs || 0, shipping: product.shipping || 0,
+      return_cost: product.return_cost || 0, cod: product.cod || 0, packaging: product.packaging || 0,
+      vat: product.vat || 0, price: product.price || 0, url: product.url || ''
+    })
+    setShowForm(true); setFormError('')
+  }
 
-      const { data } = supabase.storage
-        .from("product-images")
-        .getPublicUrl(fileName);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) return
+    try { await productsApi.remove(id); loadProducts() }
+    catch (err: any) { setError(err.message) }
+  }
 
-      set("image", data.publicUrl);
-      toast.success("Image uploaded successfully");
-    } catch (err) {
-      console.error("Failed to upload image:", err);
-      toast.error("Could not upload image");
-    } finally {
-      setUploading(false);
-    }
-  };
+  const resetForm = () => setFormData({ name: '', sku: '', cogs: 0, shipping: 0, return_cost: 0, cod: 0, packaging: 0, vat: 0, price: 0, url: '' })
 
-  const addProduct = async () => {
-    if (!form.name) {
-      toast.error("Product name is required");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingId) {
-        const item = await api.update<Product>("products", editingId, form);
-        setProducts((p) => p.map((x) => (x.id === editingId ? item : x)));
-        toast.success("Product updated");
-      } else {
-        const item = await api.create<Product>("products", form);
-        setProducts((p) => [item, ...p]);
-        toast.success("Product saved");
-      }
-      setForm(emptyForm);
-      setEditingId(null);
-      setOpen(false);
-    } catch (err) {
-      console.error("Failed to save product:", err);
-      toast.error("Could not save product");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const startEdit = (product: Product) => {
-    setForm(product);
-    setEditingId(product.id);
-    setOpen(true);
-  };
-
-  const deleteProduct = async (id: string) => {
-    const previous = products;
-    setProducts((arr) => arr.filter((x) => x.id !== id));
-    try {
-      await api.remove("products", id);
-    } catch (err) {
-      console.error("Failed to delete product:", err);
-      toast.error("Could not delete product");
-      setProducts(previous);
-    }
-  };
-
-  const closeDialog = () => {
-    setOpen(false);
-    setForm(emptyForm);
-    setEditingId(null);
-  };
+  const calculateProfit = (product: any) => product.price - (product.cogs + product.shipping + product.return_cost + product.cod + product.packaging + product.vat)
+  const calculateMargin = (product: any) => { const profit = calculateProfit(product); return product.price > 0 ? (profit / product.price) * 100 : 0 }
+  const calculateBreakEvenRoas = (product: any) => { const profit = calculateProfit(product); return profit > 0 ? (product.price / profit).toFixed(2) : '∞' }
+  const calculateTotalCost = (product: any) => product.cogs + product.shipping + product.return_cost + product.cod + product.packaging + product.vat
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex flex-wrap justify-between items-center gap-3">
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>Products</h1>
-          <p className="text-slate-500 text-sm">Manage your catalog and auto-calculate profitability per product.</p>
+          <h1 className="text-3xl font-bold text-slate-900">Products</h1>
+          <p className="text-slate-500 mt-1">Manage your product catalog and track profitability</p>
         </div>
-        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-700 hover:bg-blue-800">
-              <Plus className="w-4 h-4 mr-1" /> Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
-            </DialogHeader>
-            <div className="grid md:grid-cols-2 gap-5 mt-2">
-              <div className="space-y-3">
-                <Field label="Product Name">
-                  <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Smart Watch X" />
-                </Field>
-                <Field label="Product URL">
-                  <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="store.ae/product" />
-                </Field>
-                <Field label="SKU" tip={tips.sku}>
-                  <Input value={form.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SW-X-001" />
-                </Field>
-                <Field label="Product Image">
-                  <div className="space-y-2">
-                    {form.image && (
-                      <div className="relative w-full h-32 rounded-lg overflow-hidden bg-slate-100">
-                        <img src={form.image} alt="Product" className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => set("image", "")}
-                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                    <label className="border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-slate-400 transition-colors">
-                      <Upload className="w-5 h-5 mb-1" />
-                      <div className="text-xs">
-                        {uploading ? "Uploading..." : "Click to upload image"}
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        disabled={uploading}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </Field>
-                <Field label="Selling Price (AED)" tip={tips.sellingPrice}>{numberInput("price")}</Field>
-              </div>
+        <button onClick={() => { setShowForm(!showForm); if (showForm) { setEditingProduct(null); resetForm() } setFormError('') }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+          <Plus className="w-4 h-4" />{showForm ? 'Cancel' : 'Add Product'}
+        </button>
+      </div>
 
-              <div className="space-y-3">
-                <Field label="COGS (AED)" tip={tips.cogs}>{numberInput("cogs")}</Field>
-                <Field label="Shipping Cost (AED)" tip={tips.shipping}>{numberInput("shipping")}</Field>
-                <Field label="Return Cost (AED)" tip={tips.returnCost}>{numberInput("returnCost")}</Field>
-                <Field label="COD Fees (AED)" tip={tips.cod}>{numberInput("cod")}</Field>
-                <Field label="Packaging Fees (AED)" tip={tips.packaging}>{numberInput("packaging")}</Field>
-                <Field label="VAT (%)" tip={tips.vat}>{numberInput("vat")}</Field>
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
+
+      {showForm && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+          <div className="flex items-center gap-2 mb-4"><Calculator className="w-5 h-5 text-blue-600" /><h2 className="text-lg font-semibold">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2></div>
+          {formError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{formError}</div>}
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div className="md:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Product Name <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Wireless Headphones" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">SKU <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} placeholder="e.g., WH-001" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Product URL</label>
+                <input type="url" value={formData.url} onChange={(e) => setFormData({ ...formData, url: e.target.value })} placeholder="https://..." className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              </div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">COGS (AED)</label><input type="number" step="0.01" min="0" value={formData.cogs} onChange={(e) => setFormData({ ...formData, cogs: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">Shipping (AED)</label><input type="number" step="0.01" min="0" value={formData.shipping} onChange={(e) => setFormData({ ...formData, shipping: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">Return Cost (AED)</label><input type="number" step="0.01" min="0" value={formData.return_cost} onChange={(e) => setFormData({ ...formData, return_cost: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">COD Fee (AED)</label><input type="number" step="0.01" min="0" value={formData.cod} onChange={(e) => setFormData({ ...formData, cod: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">Packaging (AED)</label><input type="number" step="0.01" min="0" value={formData.packaging} onChange={(e) => setFormData({ ...formData, packaging: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">VAT (AED)</label><input type="number" step="0.01" min="0" value={formData.vat} onChange={(e) => setFormData({ ...formData, vat: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1.5">Selling Price (AED) <span className="text-red-500">*</span></label><input type="number" step="0.01" min="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required /></div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-lg mb-4">
+              <p className="text-sm font-medium text-slate-700 mb-2">Profitability Preview</p>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div><span className="text-slate-500">Total Cost:</span><span className="ml-2 font-medium">AED {calculateTotalCost(formData).toFixed(2)}</span></div>
+                <div><span className="text-slate-500">Profit:</span><span className={`ml-2 font-medium ${calculateProfit(formData) >= 0 ? 'text-green-600' : 'text-red-600'}`}>AED {calculateProfit(formData).toFixed(2)}</span></div>
+                <div><span className="text-slate-500">Margin:</span><span className={`ml-2 font-medium ${calculateMargin(formData) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{calculateMargin(formData).toFixed(1)}%</span></div>
               </div>
             </div>
 
-            {/* Live calc */}
-            <Card className="mt-4 p-4 bg-slate-50 border-slate-200 rounded-xl">
-              <div className="text-sm text-slate-600 mb-3">Auto Profit Calculator</div>
-              <div className="grid grid-cols-4 gap-3">
-                <Stat label="Total Cost" value={`AED ${calc.totalCost.toFixed(0)}`} />
-                <Stat label="Profit / Order" value={`AED ${calc.profit.toFixed(0)}`} tip={tips.netProfit} color="emerald" />
-                <Stat label="Margin" value={`${calc.margin.toFixed(1)}%`} tip={tips.margin} color="blue" />
-                <Stat label="Break-even ROAS" value={`${calc.breakEvenRoas.toFixed(2)}x`} tip={tips.breakEvenRoas} color="orange" />
-              </div>
-            </Card>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
-              <Button className="bg-blue-700 hover:bg-blue-800" onClick={addProduct} disabled={saving || uploading}>
-                {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                {editingId ? "Update Product" : "Save Product"}
-              </Button>
+            <div className="flex gap-3">
+              <button type="submit" className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">{editingProduct ? 'Update Product' : 'Add Product'}</button>
+              <button type="button" onClick={() => { setShowForm(false); setEditingProduct(null); resetForm(); setFormError('') }} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancel</button>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </form>
+        </div>
+      )}
 
-      {/* Table */}
-      <Card className="rounded-2xl border-slate-200 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead><span className="inline-flex items-center gap-1">SKU <InfoTip tipKey="sku" /></span></TableHead>
-              <TableHead><span className="inline-flex items-center gap-1">Price <InfoTip tipKey="sellingPrice" /></span></TableHead>
-              <TableHead><span className="inline-flex items-center gap-1">Profit <InfoTip tipKey="netProfit" /></span></TableHead>
-              <TableHead><span className="inline-flex items-center gap-1">Margin <InfoTip tipKey="margin" /></span></TableHead>
-              <TableHead><span className="inline-flex items-center gap-1">B/E ROAS <InfoTip tipKey="breakEvenRoas" /></span></TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-10 text-slate-400">
-                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t("empty.loading")}…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && products.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-16">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                      <ImageIcon className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <div>
-                      <div className="text-slate-900 mb-1">{t("empty.noProducts")}</div>
-                      <div className="text-sm text-slate-500">{t("empty.noProductsSub")}</div>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && products.map((p) => {
-              const c = calculate(p);
-              const status = statusOf(c.margin);
-              return (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden">
-                        {p.image ? (
-                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon className="w-4 h-4" />
-                        )}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Product</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">SKU</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Price</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Cost</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Profit</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">Margin</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">BE ROAS</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {products.map((product) => {
+                const profit = calculateProfit(product); const margin = calculateMargin(product)
+                const beRoas = calculateBreakEvenRoas(product); const totalCost = calculateTotalCost(product)
+                return (
+                  <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0"><Package className="w-5 h-5 text-slate-400" /></div>
+                        <div>
+                          <p className="font-medium text-slate-900">{product.name}</p>
+                          {product.url && <a href={product.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">View Product <ExternalLink className="w-3 h-3" /></a>}
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-slate-900 text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-slate-400">{p.url}</div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 font-mono">{product.sku}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium">AED {product.price.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-600">AED {totalCost.toFixed(2)}</td>
+                    <td className={`px-4 py-3 text-right text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>AED {profit.toFixed(2)}</td>
+                    <td className={`px-4 py-3 text-right text-sm font-semibold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{margin.toFixed(1)}%</td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-600 font-mono">{beRoas}x</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleEdit(product)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(product.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-slate-600">{p.sku}</TableCell>
-                  <TableCell>AED {p.price}</TableCell>
-                  <TableCell className={c.profit >= 0 ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
-                    {c.profit >= 0 ? "+" : "-"}AED {Math.abs(c.profit).toFixed(0)}
-                  </TableCell>
-                  <TableCell className="font-medium">{c.margin.toFixed(1)}%</TableCell>
-                  <TableCell>{c.breakEvenRoas.toFixed(2)}x</TableCell>
-                  <TableCell>
-                    <Badge className={`${status.classes} hover:${status.classes} border`}>{status.label}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-blue-700" onClick={() => startEdit(p)}>
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-red-700"
-                      onClick={() => deleteProduct(p.id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-function Field({ label, tip, children }: { label: string; tip?: { title: string; content: string }; children: React.ReactNode }) {
-  return (
-    <div>
-      <Label className="text-slate-700 mb-1 flex items-center gap-1 font-medium">
-        {label}
-        {tip && <InfoTip {...tip} />}
-      </Label>
-      {children}
-    </div>
-  );
-}
-
-function Stat({ label, value, tip, color }: { label: string; value: string; tip?: any; color?: string }) {
-  const palette: Record<string, string> = {
-    emerald: "bg-emerald-50 text-emerald-700",
-    blue: "bg-blue-50 text-blue-700",
-    orange: "bg-orange-50 text-orange-700",
-  };
-  return (
-    <div className={`rounded-lg p-3 ${color ? palette[color] : "bg-white border border-slate-200"}`}>
-      <div className="text-xs flex items-center gap-1 opacity-80 font-medium">
-        {label}{tip && <InfoTip {...tip} />}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {products.length === 0 && !loading && (
+          <div className="text-center py-12"><Package className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p className="text-slate-500 font-medium">No products yet</p><p className="text-sm text-slate-400 mt-1">Add your first product to start tracking profitability</p></div>
+        )}
       </div>
-      <div className="mt-1 font-semibold">{value}</div>
     </div>
-  );
+  )
 }
