@@ -1,93 +1,74 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { Landing } from "./components/Landing";
-import { AppShell } from "./components/AppShell";
-import { Auth } from "./components/Auth";
-import { I18nProvider } from "./components/i18n";
-import { Toaster } from "sonner";
-import { getSupabase } from "./components/supabase-client";
-import { setAuthToken } from "./components/api";
+// src/components/App.tsx
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { Auth } from './Auth'
+import { AppShell } from './AppShell'
+import { Dashboard } from './pages/Dashboard'
+import { Products } from './pages/Products'
+import { Orders } from './pages/Orders'
+import { Campaigns } from './pages/Campaigns'
+import { Reports } from './pages/Reports'
 
-function AppRoutes({ session }: { session: any }) {
-  const navigate = useNavigate();
-
-  return (
-    <Routes>
-      <Route 
-        path="/" 
-        element={
-          session ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Landing onEnter={() => navigate("/auth")} />
-          )
-        } 
-      />
-      <Route 
-        path="/auth" 
-        element={
-          session ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Auth 
-              onAuthed={() => navigate("/dashboard")} 
-              onBack={() => navigate("/")} 
-            />
-          )
-        } 
-      />
-      <Route 
-        path="/*" 
-        element={
-          session ? (
-            <AppShell
-              onExit={async () => {
-                await getSupabase().auth.signOut();
-                navigate("/");
-              }}
-            />
-          ) : (
-            <Navigate to="/" replace />
-          )
-        } 
-      />
-    </Routes>
-  );
-}
-
-export default function App() {
-  const [session, setSession] = useState<any>(null);
-  const [booted, setBooted] = useState(false);
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const [loading, setLoading] = useState(true)
+  const [authenticated, setAuthenticated] = useState(false)
 
   useEffect(() => {
-    const supabase = getSupabase();
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setAuthToken(data.session.access_token);
-        setSession(data.session);
+    checkAuth()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setAuthenticated(!!session)
       }
-      setBooted(true);
-    })();
+    )
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setAuthToken(session?.access_token ?? null);
-      setSession(session);
-    });
+    return () => subscription.unsubscribe()
+  }, [])
 
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    setAuthenticated(!!session)
+    setLoading(false)
+  }
 
-  if (!booted) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
 
+  if (!authenticated) {
+    return <Navigate to="/auth" replace />
+  }
+
+  return <>{children}</>
+}
+
+export function App() {
   return (
-    <I18nProvider>
-      <BrowserRouter>
-        <div className="min-h-screen bg-white">
-          <AppRoutes session={session} />
-        </div>
-      </BrowserRouter>
-      <Toaster richColors position="top-right" />
-    </I18nProvider>
-  );
+    <BrowserRouter>
+      <Routes>
+        <Route path="/auth" element={<Auth />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="products" element={<Products />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="campaigns" element={<Campaigns />} />
+          <Route path="reports" element={<Reports />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }
