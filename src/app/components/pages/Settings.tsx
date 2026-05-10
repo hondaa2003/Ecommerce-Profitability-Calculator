@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -9,9 +10,117 @@ import { Switch } from "../ui/switch";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { InfoTip } from "../InfoTip";
 import { tips } from "../glossary";
-import { Plug, Plus } from "lucide-react";
+import { Plug, Plus, Loader2 } from "lucide-react";
+import { getSupabase } from "../supabase-client";
+import { toast } from "sonner";
+
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  store_name: string;
+  store_url: string;
+  currency: string;
+  default_vat: number;
+  default_shipping: number;
+  default_cod_fee: number;
+  default_packaging: number;
+}
 
 export function Settings() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [teamMembers] = useState([
+    { name: "You", role: "Owner", email: "you@example.com" },
+  ]);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const supabase = getSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const { data } = await supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        
+        if (data) {
+          setProfile(data);
+        } else {
+          // Create default profile if doesn't exist
+          const newProfile: UserProfile = {
+            id: user.id,
+            email: user.email || "",
+            full_name: user.email?.split("@")[0] || "User",
+            store_name: "My Store",
+            store_url: "",
+            currency: "AED",
+            default_vat: 5,
+            default_shipping: 0,
+            default_cod_fee: 0,
+            default_packaging: 0,
+          };
+          setProfile(newProfile);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+      toast.error("Could not load profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!profile) return;
+    
+    setSaving(true);
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from("user_profiles")
+        .upsert({
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.full_name,
+          store_name: profile.store_name,
+          store_url: profile.store_url,
+          currency: profile.currency,
+          default_vat: profile.default_vat,
+          default_shipping: profile.default_shipping,
+          default_cod_fee: profile.default_cod_fee,
+          default_packaging: profile.default_packaging,
+        });
+      
+      if (error) throw error;
+      toast.success("Profile saved successfully");
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      toast.error("Could not save profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-700" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return <div className="text-slate-500">Failed to load profile</div>;
+  }
+
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto">
       <div>
@@ -32,16 +141,34 @@ export function Settings() {
             <div className="text-slate-900 mb-4">Store Information</div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
+                <Label className="text-slate-700 mb-1">Full Name</Label>
+                <Input 
+                  value={profile.full_name} 
+                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-slate-700 mb-1">Email</Label>
+                <Input value={profile.email} disabled />
+              </div>
+              <div>
                 <Label className="text-slate-700 mb-1">Store Name</Label>
-                <Input defaultValue="Fares Mart" />
+                <Input 
+                  value={profile.store_name} 
+                  onChange={(e) => setProfile({ ...profile, store_name: e.target.value })}
+                />
               </div>
               <div>
                 <Label className="text-slate-700 mb-1">Store URL</Label>
-                <Input defaultValue="faresmart.ae" />
+                <Input 
+                  value={profile.store_url} 
+                  onChange={(e) => setProfile({ ...profile, store_url: e.target.value })}
+                  placeholder="https://example.com"
+                />
               </div>
               <div>
                 <Label className="text-slate-700 mb-1">Currency</Label>
-                <Select defaultValue="AED">
+                <Select value={profile.currency} onValueChange={(val) => setProfile({ ...profile, currency: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="AED">AED — UAE Dirham</SelectItem>
@@ -54,7 +181,13 @@ export function Settings() {
               </div>
               <div>
                 <Label className="text-slate-700 mb-1 flex items-center gap-1">VAT (%) <InfoTip tipKey="vat" /></Label>
-                <Input type="number" defaultValue={5} />
+                <Input 
+                  type="number" 
+                  value={profile.default_vat}
+                  onChange={(e) => setProfile({ ...profile, default_vat: Number(e.target.value) })}
+                  min="0"
+                  max="100"
+                />
               </div>
             </div>
           </Card>
@@ -64,23 +197,41 @@ export function Settings() {
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <Label className="text-slate-700 mb-1 flex items-center gap-1">Shipping <InfoTip tipKey="shipping" /></Label>
-                <Input type="number" defaultValue={18} />
+                <Input 
+                  type="number" 
+                  value={profile.default_shipping}
+                  onChange={(e) => setProfile({ ...profile, default_shipping: Number(e.target.value) })}
+                  min="0"
+                />
               </div>
               <div>
                 <Label className="text-slate-700 mb-1 flex items-center gap-1">COD Fee <InfoTip tipKey="cod" /></Label>
-                <Input type="number" defaultValue={8} />
+                <Input 
+                  type="number" 
+                  value={profile.default_cod_fee}
+                  onChange={(e) => setProfile({ ...profile, default_cod_fee: Number(e.target.value) })}
+                  min="0"
+                />
               </div>
               <div>
                 <Label className="text-slate-700 mb-1 flex items-center gap-1">Packaging <InfoTip tipKey="packaging" /></Label>
-                <Input type="number" defaultValue={4} />
+                <Input 
+                  type="number" 
+                  value={profile.default_packaging}
+                  onChange={(e) => setProfile({ ...profile, default_packaging: Number(e.target.value) })}
+                  min="0"
+                />
               </div>
             </div>
-            <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
-              <div>
-                <div className="text-slate-900 text-sm">Apply defaults to new products</div>
-                <div className="text-xs text-slate-500">Products will be pre-filled with these values.</div>
-              </div>
-              <Switch defaultChecked />
+            <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
+              <Button 
+                className="bg-blue-700 hover:bg-blue-800" 
+                onClick={saveProfile}
+                disabled={saving}
+              >
+                {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                Save Settings
+              </Button>
             </div>
           </Card>
         </TabsContent>
@@ -89,14 +240,10 @@ export function Settings() {
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <div className="text-slate-900">Team Members</div>
-              <Button className="bg-blue-700 hover:bg-blue-800"><Plus className="w-4 h-4 mr-1" /> Invite</Button>
+              <Button className="bg-blue-700 hover:bg-blue-800" disabled><Plus className="w-4 h-4 mr-1" /> Invite</Button>
             </div>
             <div className="space-y-3">
-              {[
-                { name: "Ahmed Fares", role: "Owner", email: "ahmed@faresmart.ae" },
-                { name: "Layla R.", role: "Media Buyer", email: "layla@faresmart.ae" },
-                { name: "Karim H.", role: "Analyst", email: "karim@faresmart.ae" },
-              ].map((m) => (
+              {teamMembers.map((m) => (
                 <div key={m.email} className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-3">
                     <Avatar className="w-9 h-9"><AvatarFallback className="bg-blue-700 text-white text-xs">{m.name.split(" ").map((n) => n[0]).join("")}</AvatarFallback></Avatar>
@@ -107,7 +254,7 @@ export function Settings() {
                   </div>
                   <div className="flex items-center gap-3">
                     <Select defaultValue={m.role}>
-                      <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-40" disabled><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Owner">Owner</SelectItem>
                         <SelectItem value="Media Buyer">Media Buyer</SelectItem>
@@ -118,6 +265,9 @@ export function Settings() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="text-xs text-slate-500 mt-4 p-3 bg-slate-50 rounded-lg">
+              Team collaboration features coming soon. Upgrade to Pro plan to invite team members.
             </div>
           </Card>
         </TabsContent>
@@ -188,7 +338,7 @@ function IntegrationCard({ name, desc }: { name: string; desc: string }) {
           <div className="text-xs text-slate-500">{desc}</div>
         </div>
       </div>
-      <Button variant="outline" className="w-full border-slate-200">Connect</Button>
+      <Button variant="outline" className="w-full border-slate-200" disabled>Connect</Button>
       <div className="text-[10px] text-orange-600 mt-2">Available soon</div>
     </div>
   );
