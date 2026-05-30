@@ -20,6 +20,7 @@ import { Input } from "./ui/input";
 import { useI18n } from "./i18n";
 import { LangToggle } from "./LangToggle";
 import { getSupabase } from "./supabase-client";
+import { localAuth } from "../../services/local-auth";
 
 export type PageKey =
   | "dashboard"
@@ -56,12 +57,24 @@ export function AppShell({ onExit }: AppShellProps) {
   useEffect(() => {
     (async () => {
       try {
+        // Demo mode uses fixed values
         if (localStorage.getItem("demo_mode") === "true") {
           setUserName("Demo User");
           setUserEmail("demo@profitpilot.app");
           setUserInitials("DU");
           return;
         }
+
+        // Check localStorage auth first
+        const localUser = localAuth.getUser();
+        if (localUser) {
+          setUserName(localUser.name);
+          setUserEmail(localUser.email);
+          const linitials = localUser.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+          setUserInitials(linitials || "U");
+          return;
+        }
+
         const supabase = getSupabase();
         const { data: { user } } = await supabase.auth.getUser();
         

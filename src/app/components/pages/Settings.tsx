@@ -12,12 +12,13 @@ import { InfoTip } from "../InfoTip";
 import { tips } from "../glossary";
 import { Plug, Plus, Loader2 } from "lucide-react";
 import { getSupabase } from "../supabase-client";
+import { localAuth } from "../../../services/local-auth";
 import { toast } from "sonner";
 import { useI18n } from "../i18n";
 import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../services/currency-store";
 
 function isDemoMode(): boolean {
-  return localStorage.getItem("demo_mode") === "true";
+  return localStorage.getItem("demo_mode") === "true" || localAuth.isAuthenticated();
 }
 
 interface UserProfile {
@@ -59,8 +60,15 @@ export function Settings() {
 
   const loadProfile = async () => {
     try {
-      if (isDemoMode()) {
-        setProfile({ ...demoProfile, currency: getCurrency() });
+      const localUser = localAuth.getUser();
+      if (localAuth.isDemoMode() || localUser) {
+        setProfile({
+          ...demoProfile,
+          id: localUser?.id || "demo-user",
+          email: localUser?.email || "demo@profitpilot.app",
+          full_name: localUser?.name || "Demo User",
+          currency: getCurrency(),
+        });
         setLoading(false);
         return;
       }

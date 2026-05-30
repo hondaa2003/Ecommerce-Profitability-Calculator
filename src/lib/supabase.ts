@@ -1,6 +1,7 @@
 // src/lib/supabase.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mockApi } from "../services/mock-data";
+import { localAuth } from "../services/local-auth";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://cjteefcgtjvgxephwznm.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdGVlZmNndGp2Z3hlcGh3em5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTYxNTksImV4cCI6MjA5MzczMjE1OX0.U9BvJx4q_3Ah_G1BbCHGgQ2qjCW6ooG5YJQKgvFKJwY";
@@ -18,14 +19,17 @@ export function getSupabaseClient(): SupabaseClient {
 
 export const supabase = getSupabaseClient();
 
-function isDemo(): boolean {
-  return typeof window !== "undefined" && localStorage.getItem("demo_mode") === "true";
+function isLocalMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const demo = localStorage.getItem("demo_mode") === "true";
+  const localAuthSession = localAuth.isAuthenticated();
+  return demo || localAuthSession;
 }
 
 // --- API helpers for Reports.tsx ---
 
 async function apiRequest<T>(method: string, endpoint: string, body?: any): Promise<T> {
-  if (isDemo()) throw new Error("Demo mode - using mock data");
+  if (isLocalMode()) throw new Error("Offline mode - using mock data");
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Not authenticated");
   const res = await fetch(`${SUPABASE_URL}/functions/v1/server${endpoint}`, {

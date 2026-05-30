@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { localAuth } from '../services/local-auth'
 import { Auth } from './components/Auth'
 import { AppShell } from './components/AppShell'
 import { Landing } from './components/Landing'
@@ -25,11 +26,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       return
     }
 
+    // Check localStorage auth session
+    if (localAuth.isAuthenticated()) {
+      setAuthenticated(true)
+      setLoading(false)
+      return
+    }
+
     checkAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setAuthenticated(!!session)
+        setAuthenticated(!!session || localAuth.isAuthenticated())
       }
     )
 
@@ -60,7 +68,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export function App() {
   const handleLogout = async () => {
     localStorage.removeItem("demo_mode");
-    await supabase.auth.signOut();
+    localAuth.signOut();
+    try { await supabase.auth.signOut(); } catch (_) {}
   };
 
   return (
