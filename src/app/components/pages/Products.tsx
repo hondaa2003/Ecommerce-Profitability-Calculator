@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
+import { formatCurrencyDecimal, getCurrency } from "../../../services/currency-store";
 
 interface Product {
   id: string;
@@ -28,6 +29,7 @@ function numVal(v: number): string {
 
 export function Products() {
   const { t, dir } = useI18n();
+  const curr = getCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -96,19 +98,19 @@ export function Products() {
             <div className="space-y-4 pt-4">
               <div><Label>{t("products.name")}</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Wireless Earbuds" /></div>
               <div><Label>{t("products.sku")}</Label><Input value={form.sku || ""} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="SKU-001" /></div>
-              <div><Label>{t("products.sellingPrice")} (AED)</Label><Input type="number" value={numVal(form.price)} onChange={e => setForm({ ...form, price: Number(e.target.value) })} placeholder="100" /></div>
+              <div><Label>{t("products.sellingPrice")} ({curr})</Label><Input type="number" value={numVal(form.price)} onChange={e => setForm({ ...form, price: Number(e.target.value) })} placeholder="100" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>{t("products.cogs")} (AED)</Label><Input type="number" value={numVal(form.cogs)} onChange={e => setForm({ ...form, cogs: Number(e.target.value) })} placeholder="30" /></div>
-                <div><Label>{t("products.shipping")} (AED)</Label><Input type="number" value={numVal(form.shipping)} onChange={e => setForm({ ...form, shipping: Number(e.target.value) })} placeholder="10" /></div>
-                <div><Label>{t("products.returnCost")} (AED)</Label><Input type="number" value={numVal(form.return_cost)} onChange={e => setForm({ ...form, return_cost: Number(e.target.value) })} placeholder="5" /></div>
-                <div><Label>{t("products.cod")} (AED)</Label><Input type="number" value={numVal(form.cod)} onChange={e => setForm({ ...form, cod: Number(e.target.value) })} placeholder="15" /></div>
-                <div><Label>{t("products.packaging")} (AED)</Label><Input type="number" value={numVal(form.packaging)} onChange={e => setForm({ ...form, packaging: Number(e.target.value) })} placeholder="3" /></div>
-                <div><Label>{t("products.vat")} (AED)</Label><Input type="number" value={numVal(form.vat)} onChange={e => setForm({ ...form, vat: Number(e.target.value) })} placeholder="5" /></div>
+                <div><Label>{t("products.cogs")} ({curr})</Label><Input type="number" value={numVal(form.cogs)} onChange={e => setForm({ ...form, cogs: Number(e.target.value) })} placeholder="30" /></div>
+                <div><Label>{t("products.shipping")} ({curr})</Label><Input type="number" value={numVal(form.shipping)} onChange={e => setForm({ ...form, shipping: Number(e.target.value) })} placeholder="10" /></div>
+                <div><Label>{t("products.returnCost")} ({curr})</Label><Input type="number" value={numVal(form.return_cost)} onChange={e => setForm({ ...form, return_cost: Number(e.target.value) })} placeholder="5" /></div>
+                <div><Label>{t("products.cod")} ({curr})</Label><Input type="number" value={numVal(form.cod)} onChange={e => setForm({ ...form, cod: Number(e.target.value) })} placeholder="15" /></div>
+                <div><Label>{t("products.packaging")} ({curr})</Label><Input type="number" value={numVal(form.packaging)} onChange={e => setForm({ ...form, packaging: Number(e.target.value) })} placeholder="3" /></div>
+                <div><Label>{t("products.vat")} ({curr})</Label><Input type="number" value={numVal(form.vat)} onChange={e => setForm({ ...form, vat: Number(e.target.value) })} placeholder="5" /></div>
               </div>
               {form.price > 0 && (
                 <div className="bg-slate-50 rounded-lg p-4 space-y-1">
-                  <div className="flex justify-between text-sm"><span>{t("products.totalCost")}:</span><span className="font-medium">AED {totalCost.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-sm"><span>{t("kpi.profit")}:</span><span className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>AED {profit.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-sm"><span>{t("products.totalCost")}:</span><span className="font-medium">{formatCurrencyDecimal(totalCost)}</span></div>
+                  <div className="flex justify-between text-sm"><span>{t("kpi.profit")}:</span><span className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrencyDecimal(profit)}</span></div>
                   <div className="flex justify-between text-sm"><span>{t("kpi.margin")}:</span><span className={`font-medium ${margin >= 0 ? "text-green-600" : "text-red-600"}`}>{margin.toFixed(1)}%</span></div>
                 </div>
               )}
@@ -132,7 +134,7 @@ export function Products() {
               <Card key={p.id} className="p-4 flex justify-between items-center">
                 <div>
                   <div className="font-bold">{p.name}</div>
-                  <div className="text-sm text-slate-500">SKU: {p.sku || "N/A"} &middot; AED {p.price?.toFixed(2) || "0.00"} &middot; <span className={pProfit >= 0 ? "text-green-600" : "text-red-600"}>Profit: AED {pProfit.toFixed(2)}</span></div>
+                  <div className="text-sm text-slate-500">SKU: {p.sku || "N/A"} &middot; {formatCurrencyDecimal(p.price || 0)} &middot; <span className={pProfit >= 0 ? "text-green-600" : "text-red-600"}>Profit: {formatCurrencyDecimal(pProfit)}</span></div>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleEdit(p)}><Pencil className="w-4 h-4" /></Button>

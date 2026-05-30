@@ -56,6 +56,12 @@ export function AppShell({ onExit }: AppShellProps) {
   useEffect(() => {
     (async () => {
       try {
+        if (localStorage.getItem("demo_mode") === "true") {
+          setUserName("Demo User");
+          setUserEmail("demo@profitpilot.app");
+          setUserInitials("DU");
+          return;
+        }
         const supabase = getSupabase();
         const { data: { user } } = await supabase.auth.getUser();
         

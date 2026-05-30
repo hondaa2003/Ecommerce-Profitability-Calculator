@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useI18n } from "../i18n";
+import { formatCurrency } from "../../../services/currency-store";
 
 export function Dashboard() {
   const { t, dir } = useI18n();
@@ -32,8 +33,8 @@ export function Dashboard() {
   ];
 
   const kpis = [
-    { label: t("kpi.revenue"), value: `AED ${stats.summary.total_revenue.toLocaleString()}`, color: "" },
-    { label: t("kpi.netProfit"), value: `AED ${stats.summary.total_profit.toLocaleString()}`, color: "text-emerald-600" },
+    { label: t("kpi.revenue"), value: formatCurrency(stats.summary.total_revenue), color: "" },
+    { label: t("kpi.netProfit"), value: formatCurrency(stats.summary.total_profit), color: "text-emerald-600" },
     { label: t("kpi.roas"), value: `${stats.summary.total_roas.toFixed(2)}x`, color: "text-blue-600" },
     { label: t("kpi.orders"), value: `${stats.summary.total_orders}`, color: "" },
   ];

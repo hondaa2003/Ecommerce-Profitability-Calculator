@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { productsApi, ordersApi, campaignsApi } from '../../../lib/supabase'
 import { Download, FileText, BarChart3, Calendar } from 'lucide-react'
 import { useI18n } from '../i18n'
+import { formatCurrencyDecimal, formatCurrency, getCurrency } from '../../../services/currency-store'
 
 export function Reports() {
   const { t, dir } = useI18n()
+  const curr = getCurrency()
   const [products, setProducts] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
@@ -98,11 +100,11 @@ export function Reports() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 mb-2"><BarChart3 className="w-5 h-5 text-blue-600" /><span className="text-sm text-slate-500">{t("kpi.profit")}</span></div>
-          <p className="text-2xl font-bold text-slate-900">AED {totalProfit.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalProfit)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 mb-2"><FileText className="w-5 h-5 text-green-600" /><span className="text-sm text-slate-500">{t("kpi.revenue")}</span></div>
-          <p className="text-2xl font-bold text-slate-900">AED {totalRevenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalRevenue)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 mb-2"><Calendar className="w-5 h-5 text-purple-600" /><span className="text-sm text-slate-500">{t("kpi.roas")}</span></div>
@@ -136,13 +138,13 @@ export function Reports() {
               {productReport.map((p, i) => (
                 <tr key={i} className="hover:bg-slate-50/50">
                   <td className="px-4 py-3"><p className="font-medium text-slate-900">{p.name}</p><p className="text-xs text-slate-500">{p.sku}</p></td>
-                  <td className="px-4 py-3 text-end text-sm">AED {p.price.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-end text-sm text-slate-600">AED {p.cost.toFixed(2)}</td>
-                  <td className={`px-4 py-3 text-end text-sm font-medium ${p.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>AED {p.profit.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-end text-sm">{formatCurrencyDecimal(p.price)}</td>
+                  <td className="px-4 py-3 text-end text-sm text-slate-600">{formatCurrencyDecimal(p.cost)}</td>
+                  <td className={`px-4 py-3 text-end text-sm font-medium ${p.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrencyDecimal(p.profit)}</td>
                   <td className={`px-4 py-3 text-end text-sm font-medium ${p.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.margin.toFixed(1)}%</td>
                   <td className="px-4 py-3 text-end text-sm text-slate-600">{p.beRoas}x</td>
                   <td className="px-4 py-3 text-end text-sm">{p.totalSold}</td>
-                  <td className="px-4 py-3 text-end text-sm font-medium">AED {p.totalRevenue.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-end text-sm font-medium">{formatCurrencyDecimal(p.totalRevenue)}</td>
                 </tr>
               ))}
             </tbody>
@@ -177,10 +179,10 @@ export function Reports() {
                 <tr key={i} className="hover:bg-slate-50/50">
                   <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 capitalize">{c.platform}</td>
-                  <td className="px-4 py-3 text-end text-sm text-orange-600">AED {c.spend.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-end text-sm text-emerald-600">AED {c.revenue.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-end text-sm text-orange-600">{formatCurrencyDecimal(c.spend)}</td>
+                  <td className="px-4 py-3 text-end text-sm text-emerald-600">{formatCurrencyDecimal(c.revenue)}</td>
                   <td className={`px-4 py-3 text-end text-sm font-semibold ${parseFloat(c.roas) >= 2 ? 'text-green-600' : parseFloat(c.roas) >= 1 ? 'text-yellow-600' : 'text-red-600'}`}>{c.roas}x</td>
-                  <td className="px-4 py-3 text-end text-sm">AED {c.cpa}</td>
+                  <td className="px-4 py-3 text-end text-sm">{formatCurrencyDecimal(parseFloat(c.cpa))}</td>
                   <td className="px-4 py-3 text-end text-sm">{c.orders}</td>
                 </tr>
               ))}

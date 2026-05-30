@@ -10,11 +10,13 @@ import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useI18n } from "../i18n";
+import { formatCurrencyDecimal, getCurrency } from "../../../services/currency-store";
 
 function numVal(v: number): string { return v === 0 ? "0" : v ? String(v) : ""; }
 
 export function Orders() {
   const { t, dir } = useI18n();
+  const curr = getCurrency();
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export function Orders() {
                 </Select>
               </div>
               <div>
-                <Label>{t("orders.amount")} (AED)</Label>
+                <Label>{t("orders.amount")} ({curr})</Label>
                 <Input type="number" value={numVal(form.amount)} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} placeholder="150" />
               </div>
               <div>
@@ -121,7 +123,7 @@ export function Orders() {
               </div>
               <div className="flex items-center gap-3">
                 <Badge className={statusColor(o.status)}>{statusLabel(o.status)}</Badge>
-                <div className="font-bold">AED {o.amount?.toFixed(2) || "0.00"}</div>
+                <div className="font-bold">{formatCurrencyDecimal(o.amount || 0)}</div>
               </div>
             </Card>
           ))}

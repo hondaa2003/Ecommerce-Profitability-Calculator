@@ -10,11 +10,13 @@ import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useI18n } from "../i18n";
+import { formatCurrencyDecimal, getCurrency } from "../../../services/currency-store";
 
 function numVal(v: number): string { return v === 0 ? "0" : v ? String(v) : ""; }
 
 export function Campaigns() {
   const { t, dir } = useI18n();
+  const curr = getCurrency();
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,8 +87,8 @@ export function Campaigns() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>{t("kpi.spend")} (AED)</Label><Input type="number" value={numVal(form.spend)} onChange={e => setForm({ ...form, spend: Number(e.target.value) })} placeholder="500" /></div>
-              <div><Label>{t("kpi.revenue")} (AED)</Label><Input type="number" value={numVal(form.revenue)} onChange={e => setForm({ ...form, revenue: Number(e.target.value) })} placeholder="1500" /></div>
+              <div><Label>{t("kpi.spend")} ({curr})</Label><Input type="number" value={numVal(form.spend)} onChange={e => setForm({ ...form, spend: Number(e.target.value) })} placeholder="500" /></div>
+              <div><Label>{t("kpi.revenue")} ({curr})</Label><Input type="number" value={numVal(form.revenue)} onChange={e => setForm({ ...form, revenue: Number(e.target.value) })} placeholder="1500" /></div>
               <div><Label>{t("kpi.orders")}</Label><Input type="number" value={numVal(form.orders_count)} onChange={e => setForm({ ...form, orders_count: Number(e.target.value) })} placeholder="10" /></div>
               <Button onClick={handleSave} disabled={!form.name || form.spend <= 0} className="w-full">{t("camp.add")}</Button>
             </div>
@@ -105,8 +107,8 @@ export function Campaigns() {
                 <div className="text-sm text-slate-500">{platformLabel(c.platform)} &middot; {c.orders_count} {t("kpi.orders")}</div>
               </div>
               <div className="text-end">
-                <div className="font-bold text-orange-600">{t("kpi.spend")}: AED {c.spend?.toFixed(2)}</div>
-                <div className="text-sm text-emerald-600">Rev: AED {c.revenue?.toFixed(2)}</div>
+                <div className="font-bold text-orange-600">{t("kpi.spend")}: {formatCurrencyDecimal(c.spend || 0)}</div>
+                <div className="text-sm text-emerald-600">Rev: {formatCurrencyDecimal(c.revenue || 0)}</div>
                 <Badge className={`mt-0.5 ${roasColor(roas(c.spend, c.revenue))}`}>ROAS: {roas(c.spend, c.revenue)}x</Badge>
               </div>
             </Card>

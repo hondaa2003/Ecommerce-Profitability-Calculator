@@ -1,9 +1,7 @@
 // src/lib/supabase.ts
-// Single source of truth for Supabase client and API access
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mockApi } from "../services/mock-data";
 
-// Use environment variables with fallback for development
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://cjteefcgtjvgxephwznm.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdGVlZmNndGp2Z3hlcGh3em5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTYxNTksImV4cCI6MjA5MzczMjE1OX0.U9BvJx4q_3Ah_G1BbCHGgQ2qjCW6ooG5YJQKgvFKJwY";
 
@@ -18,22 +16,21 @@ export function getSupabaseClient(): SupabaseClient {
   return supabaseClient;
 }
 
-// Singleton supabase instance for direct use (App.tsx, Auth.tsx)
 export const supabase = getSupabaseClient();
+
+function isDemo(): boolean {
+  return typeof window !== "undefined" && localStorage.getItem("demo_mode") === "true";
+}
 
 // --- API helpers for Reports.tsx ---
 
-async function getAuthToken(): Promise<string> {
+async function apiRequest<T>(method: string, endpoint: string, body?: any): Promise<T> {
+  if (isDemo()) throw new Error("Demo mode - using mock data");
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Not authenticated");
-  return session.access_token;
-}
-
-async function apiRequest<T>(method: string, endpoint: string, body?: any): Promise<T> {
-  const token = await getAuthToken();
   const res = await fetch(`${SUPABASE_URL}/functions/v1/server${endpoint}`, {
     method,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
