@@ -121,3 +121,48 @@ export const mockApi = {
   },
   getDashboardStats: async () => getDashboardStats(),
 };
+
+// Simulate importing data from a connected platform
+export function syncFromIntegration(platform: string): { products: number; orders: number; campaigns: number } {
+  const newProducts = [
+    { name: `${platform} Artisan Watch`, sku: `${platform.slice(0, 3).toUpperCase()}-010`, price: 189, cogs: 65, shipping: 15, return_cost: 8, cod: 10, packaging: 5, vat: 8 },
+    { name: `${platform} Fitness Tracker`, sku: `${platform.slice(0, 3).toUpperCase()}-011`, price: 129, cogs: 40, shipping: 12, return_cost: 6, cod: 9, packaging: 4, vat: 6 },
+    { name: `${platform} Wireless Charger`, sku: `${platform.slice(0, 3).toUpperCase()}-012`, price: 59, cogs: 18, shipping: 8, return_cost: 3, cod: 7, packaging: 3, vat: 3 },
+  ];
+  const results = { products: 0, orders: 0, campaigns: 0 };
+
+  newProducts.forEach(np => {
+    if (!SAMPLE_PRODUCTS.some(p => p.sku === np.sku)) {
+      SAMPLE_PRODUCTS.push({ id: `prod-${String(productCounter++).padStart(3, "0")}`, ...np, created_at: new Date().toISOString() });
+      results.products++;
+    }
+  });
+
+  // Add a couple of orders for the new products
+  const newProds = SAMPLE_PRODUCTS.slice(-3);
+  newProds.forEach(np => {
+    SAMPLE_ORDERS.push({
+      id: `ord-${String(orderCounter++).padStart(3, "0")}`,
+      product_id: np.id,
+      customer_name: ["Ahmed Ali", "Noor Hassan", "Khalid Omar"][Math.floor(Math.random() * 3)],
+      amount: np.price,
+      status: "Delivered",
+      created_at: new Date().toISOString(),
+    });
+    results.orders++;
+  });
+
+  // Add one campaign
+  SAMPLE_CAMPAIGNS.push({
+    id: `camp-${String(campaignCounter++).padStart(3, "0")}`,
+    name: `${platform} Retargeting Q2`,
+    platform: platform,
+    spend: 350 + Math.floor(Math.random() * 400),
+    orders_count: 8 + Math.floor(Math.random() * 15),
+    revenue: 800 + Math.floor(Math.random() * 2000),
+    created_at: new Date().toISOString(),
+  });
+  results.campaigns++;
+
+  return results;
+}
