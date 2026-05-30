@@ -1,8 +1,12 @@
 import React from 'react';
-import { useLanguageSwitcher } from '../i18n-provider';
+import { useI18n } from '../i18n';
 
 export function LanguageSwitcher() {
-  const { lang, toggleLanguage } = useLanguageSwitcher();
+  const { lang, setLang } = useI18n();
+
+  const toggleLanguage = () => {
+    setLang(lang === 'ar' ? 'en' : 'ar');
+  };
 
   return (
     <button

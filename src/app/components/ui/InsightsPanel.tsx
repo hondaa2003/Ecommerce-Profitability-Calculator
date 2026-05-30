@@ -1,6 +1,6 @@
 import React from 'react';
-import { Insight } from '../../services/ai-insights';
-import { useI18n } from '../i18n-provider';
+import { Insight } from '../../../services/ai-insights';
+import { useI18n } from '../i18n';
 
 interface InsightsPanelProps {
   insights: Insight[];

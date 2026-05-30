@@ -300,7 +300,20 @@ const I18nContext = createContext<Ctx>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("ar");
+  const [lang, setLangState] = useState<Lang>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("language") as Lang | null;
+      if (stored === "en" || stored === "ar") return stored;
+    }
+    return "ar";
+  });
+
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("language", l);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.lang = lang;

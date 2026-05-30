@@ -229,7 +229,7 @@ export function Settings() {
                 onClick={saveProfile}
                 disabled={saving}
               >
-                {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                {saving && <Loader2 className="w-4 h-4 me-1 animate-spin" />}
                 Save Settings
               </Button>
             </div>
@@ -240,7 +240,7 @@ export function Settings() {
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <div className="text-slate-900">Team Members</div>
-              <Button className="bg-blue-700 hover:bg-blue-800" disabled><Plus className="w-4 h-4 mr-1" /> Invite</Button>
+              <Button className="bg-blue-700 hover:bg-blue-800" disabled><Plus className="w-4 h-4 me-1" /> Invite</Button>
             </div>
             <div className="space-y-3">
               {teamMembers.map((m) => (

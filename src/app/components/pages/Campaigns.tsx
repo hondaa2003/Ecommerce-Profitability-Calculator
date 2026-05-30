@@ -5,25 +5,25 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
+import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
+import { useI18n } from "../i18n";
+
+function numVal(v: number): string { return v === 0 ? "0" : v ? String(v) : ""; }
 
 export function Campaigns() {
+  const { t, dir } = useI18n();
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", platform: "Meta", spend: 0, orders_count: 0, revenue: 0 });
 
-  const fetchCampaigns = () => {
+  const fetchCampaigns = async () => {
     setLoading(true);
-    api.getCampaigns().then(setCampaigns).catch(() => {}).finally(() => setLoading(false));
+    try { setCampaigns(await api.getCampaigns()); } catch {}
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchCampaigns(); }, []);
@@ -31,39 +31,50 @@ export function Campaigns() {
   const handleSave = async () => {
     try {
       await api.createCampaign({ ...form, spend: Number(form.spend), revenue: Number(form.revenue), orders_count: Number(form.orders_count) });
-      toast.success("Campaign added");
+      toast.success(t("camp.add"));
       setForm({ name: "", platform: "Meta", spend: 0, orders_count: 0, revenue: 0 });
       setDialogOpen(false);
       fetchCampaigns();
-    } catch {
-      toast.error("Failed to save campaign");
-    }
+    } catch { toast.error(t("camp.sub")); }
   };
 
   const roas = (s: number, r: number) => s > 0 ? (r / s).toFixed(2) : "0.00";
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-slate-400">Loading campaigns...</div>;
+  const platformLabel = (p: string) => {
+    switch (p?.toLowerCase()) {
+      case "meta": return "Meta (Facebook/Instagram)";
+      case "google": return "Google Ads";
+      case "tiktok": return "TikTok Ads";
+      case "snapchat": return "Snapchat Ads";
+      default: return p;
+    }
+  };
+
+  const roasColor = (val: string) => {
+    const n = parseFloat(val);
+    if (n >= 2) return "text-green-600";
+    if (n >= 1) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-20 text-slate-400">{t("empty.loading")}</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir={dir}>
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Ad Campaigns</h1>
-          <p className="text-sm text-slate-500 mt-1">Track your advertising performance.</p>
+          <h1 className="text-2xl font-bold">{t("camp.title")}</h1>
+          <p className="text-sm text-slate-500 mt-1">{t("camp.sub")}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="w-4 h-4 mr-1" /> Add Campaign</Button>
+            <Button><Plus className="w-4 h-4 me-1" /> {t("camp.add")}</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Add New Campaign</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("camp.add")}</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
-              <div>
-                <Label>Campaign Name</Label>
-                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Summer Sale 2024" />
-              </div>
-              <div>
-                <Label>Platform</Label>
+              <div><Label>{t("camp.name")}</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Summer Sale 2024" /></div>
+              <div><Label>{t("camp.platform")}</Label>
                 <Select value={form.platform} onValueChange={(v) => setForm({ ...form, platform: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -74,43 +85,29 @@ export function Campaigns() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Ad Spend (AED)</Label>
-                <Input type="number" value={form.spend || ""} onChange={e => setForm({ ...form, spend: Number(e.target.value) })} placeholder="500" />
-              </div>
-              <div>
-                <Label>Revenue (AED)</Label>
-                <Input type="number" value={form.revenue || ""} onChange={e => setForm({ ...form, revenue: Number(e.target.value) })} placeholder="1500" />
-              </div>
-              <div>
-                <Label>Orders</Label>
-                <Input type="number" value={form.orders_count || ""} onChange={e => setForm({ ...form, orders_count: Number(e.target.value) })} placeholder="10" />
-              </div>
-              <Button onClick={handleSave} disabled={!form.name || form.spend <= 0} className="w-full">
-                Save Campaign
-              </Button>
+              <div><Label>{t("kpi.spend")} (AED)</Label><Input type="number" value={numVal(form.spend)} onChange={e => setForm({ ...form, spend: Number(e.target.value) })} placeholder="500" /></div>
+              <div><Label>{t("kpi.revenue")} (AED)</Label><Input type="number" value={numVal(form.revenue)} onChange={e => setForm({ ...form, revenue: Number(e.target.value) })} placeholder="1500" /></div>
+              <div><Label>{t("kpi.orders")}</Label><Input type="number" value={numVal(form.orders_count)} onChange={e => setForm({ ...form, orders_count: Number(e.target.value) })} placeholder="10" /></div>
+              <Button onClick={handleSave} disabled={!form.name || form.spend <= 0} className="w-full">{t("camp.add")}</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
       {campaigns.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <p className="text-lg">No campaigns yet</p>
-          <p className="text-sm mt-1">Add your first campaign to track ROAS</p>
-        </div>
+        <div className="text-center py-16 text-slate-400"><p className="text-lg">{t("empty.noCampaigns")}</p><p className="text-sm mt-1">{t("empty.noCampaignsSub")}</p></div>
       ) : (
         <div className="grid gap-4">
           {campaigns.map(c => (
-            <Card key={c.id} className="p-4 flex justify-between">
+            <Card key={c.id} className="p-4 flex justify-between items-center">
               <div>
                 <div className="font-bold">{c.name}</div>
-                <div className="text-sm text-slate-500 capitalize">{c.platform} &middot; {c.orders_count} orders</div>
+                <div className="text-sm text-slate-500">{platformLabel(c.platform)} &middot; {c.orders_count} {t("kpi.orders")}</div>
               </div>
-              <div className="text-right">
-                <div className="font-bold text-orange-600">Spend: AED {c.spend?.toFixed(2)}</div>
+              <div className="text-end">
+                <div className="font-bold text-orange-600">{t("kpi.spend")}: AED {c.spend?.toFixed(2)}</div>
                 <div className="text-sm text-emerald-600">Rev: AED {c.revenue?.toFixed(2)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">ROAS: {roas(c.spend, c.revenue)}x</div>
+                <Badge className={`mt-0.5 ${roasColor(roas(c.spend, c.revenue))}`}>ROAS: {roas(c.spend, c.revenue)}x</Badge>
               </div>
             </Card>
           ))}

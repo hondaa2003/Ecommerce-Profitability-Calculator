@@ -58,9 +58,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function App() {
-  const navigateToAuth = () => {
-    // Use a global navigation hack since we're inside the Router
-  };
   const handleLogout = async () => {
     localStorage.removeItem("demo_mode");
     await supabase.auth.signOut();

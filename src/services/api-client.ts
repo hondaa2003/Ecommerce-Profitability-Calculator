@@ -7,16 +7,11 @@ const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/server`;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Track whether we're in demo/offline mode
-let useMockData = false;
-
-function enableMockIfNeeded(err: any) {
-  // If we get a network error or the edge function is unreachable, switch to mock data
-  if (!useMockData) {
-    console.warn("Backend unavailable, switching to demo mode with sample data:", err?.message || err);
-    useMockData = true;
-  }
+function isDemoMode(): boolean {
+  return localStorage.getItem("demo_mode") === "true";
 }
+
+let backendAvailable = true;
 
 class ApiClient {
   private async getAuthToken() {
@@ -25,66 +20,46 @@ class ApiClient {
   }
 
   private async request<T>(method: string, endpoint: string, body?: unknown): Promise<T> {
-    try {
-      const token = await this.getAuthToken();
-      if (!token) throw new Error("Not authenticated");
-
-      const res = await fetch(`${EDGE_FUNCTION_URL}${endpoint}`, {
-        method,
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "API Error");
-      }
-      return res.json() as Promise<T>;
-    } catch (err: any) {
-      enableMockIfNeeded(err);
-      throw err; // Re-throw so callers can fall back
+    if (isDemoMode() || !backendAvailable) {
+      throw new Error("Using mock data");
     }
+    const token = await this.getAuthToken();
+    if (!token) throw new Error("Not authenticated");
+
+    const res = await fetch(`${EDGE_FUNCTION_URL}${endpoint}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "API Error");
+    }
+    return res.json() as Promise<T>;
   }
 
-  async getProducts() {
-    try { return await this.request<any[]>("GET", "/products"); }
-    catch { return mockApi.getProducts(); }
-  }
-  async createProduct(p: any) {
-    try { return await this.request<any>("POST", "/products", p); }
-    catch { return mockApi.createProduct(p); }
-  }
-  async updateProduct(id: string, p: any) {
-    try { return await this.request<any>("PUT", `/products/${id}`, p); }
-    catch { return mockApi.updateProduct(id, p); }
-  }
-  async deleteProduct(id: string) {
-    try { return await this.request<any>("DELETE", `/products/${id}`); }
-    catch { mockApi.deleteProduct(id); }
+  private mockCatch<T>(fn: () => Promise<T>, mockFn: () => Promise<T>): Promise<T> {
+    return fn().catch(() => {
+      if (backendAvailable) {
+        backendAvailable = false;
+      }
+      return mockFn();
+    });
   }
 
-  async getOrders() {
-    try { return await this.request<any[]>("GET", "/orders"); }
-    catch { return mockApi.getOrders(); }
-  }
-  async createOrder(o: any) {
-    try { return await this.request<any>("POST", "/orders", o); }
-    catch { return mockApi.createOrder(o); }
-  }
+  async getProducts() { return this.mockCatch(() => this.request<any[]>("GET", "/products"), () => mockApi.getProducts()); }
+  async createProduct(p: any) { return this.mockCatch(() => this.request<any>("POST", "/products", p), () => mockApi.createProduct(p)); }
+  async updateProduct(id: string, p: any) { return this.mockCatch(() => this.request<any>("PUT", `/products/${id}`, p), () => mockApi.updateProduct(id, p)); }
+  async deleteProduct(id: string) { return this.mockCatch(() => this.request<any>("DELETE", `/products/${id}`), async () => { mockApi.deleteProduct(id); }); }
 
-  async getCampaigns() {
-    try { return await this.request<any[]>("GET", "/campaigns"); }
-    catch { return mockApi.getCampaigns(); }
-  }
-  async createCampaign(c: any) {
-    try { return await this.request<any>("POST", "/campaigns", c); }
-    catch { return mockApi.createCampaign(c); }
-  }
+  async getOrders() { return this.mockCatch(() => this.request<any[]>("GET", "/orders"), () => mockApi.getOrders()); }
+  async createOrder(o: any) { return this.mockCatch(() => this.request<any>("POST", "/orders", o), () => mockApi.createOrder(o)); }
 
-  async getDashboardStats() {
-    try { return await this.request<any>("GET", "/dashboard-stats"); }
-    catch { return mockApi.getDashboardStats(); }
-  }
+  async getCampaigns() { return this.mockCatch(() => this.request<any[]>("GET", "/campaigns"), () => mockApi.getCampaigns()); }
+  async createCampaign(c: any) { return this.mockCatch(() => this.request<any>("POST", "/campaigns", c), () => mockApi.createCampaign(c)); }
+
+  async getDashboardStats() { return this.mockCatch(() => this.request<any>("GET", "/dashboard-stats"), () => mockApi.getDashboardStats()); }
 }
 
 export const api = new ApiClient();

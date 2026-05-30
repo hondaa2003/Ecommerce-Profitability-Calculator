@@ -23,12 +23,12 @@ import { LangToggle } from "./LangToggle";
 
 interface LandingProps {
   onEnter: () => void;
-  onShop?: () => void;
   onDemo?: () => void;
 }
 
 export function Landing({ onEnter, onDemo }: LandingProps) {
   const { t, dir } = useI18n();
+  const isRTL = dir === "rtl";
   return (
     <div className="min-h-screen bg-white text-slate-900" dir={dir}>
       {/* Nav */}
@@ -39,7 +39,7 @@ export function Landing({ onEnter, onDemo }: LandingProps) {
               <Calculator className="w-5 h-5" />
             </div>
             <span className="text-slate-900">ProfitPilot</span>
-            <Badge className="ml-2 bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-50">
+            <Badge className="ms-2 bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-50">
               MENA · GCC
             </Badge>
           </div>
@@ -75,7 +75,7 @@ export function Landing({ onEnter, onDemo }: LandingProps) {
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={onEnter} className="bg-blue-700 hover:bg-blue-800 text-white">
-                {t("cta.startTrial")} <ArrowRight className="w-4 h-4 ms-1 rtl:rotate-180" />
+                {t("cta.startTrial")} <ArrowRight className={`w-4 h-4 ms-1 ${isRTL ? "-scale-x-100" : ""}`} />
               </Button>
               <Button size="lg" variant="outline" onClick={onDemo} className="border-slate-300">
                 {t("cta.bookDemo")}
