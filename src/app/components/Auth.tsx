@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Lock, User, ArrowRight, Store } from 'lucide-react'
 
@@ -34,7 +34,7 @@ export function Auth() {
 
         if (data.user) {
           const { error: profileError } = await supabase
-            .from('profiles')
+            .from('user_profiles')
             .insert([{
               id: data.user.id,
               full_name: fullName,
@@ -46,9 +46,9 @@ export function Auth() {
           }
 
           setMessage('Account created! Please check your email to confirm.')
-          if (data.session) {
-            navigate('/dashboard')
-          }
+if (data.session) {
+              navigate('/app/dashboard')
+            }
         }
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -59,7 +59,7 @@ export function Auth() {
         if (signInError) throw signInError
 
         if (data.session) {
-          navigate('/dashboard')
+          navigate('/app/dashboard')
         }
       }
     } catch (err: any) {

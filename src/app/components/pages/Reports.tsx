@@ -1,6 +1,6 @@
 // src/components/pages/Reports.tsx
 import { useEffect, useState } from 'react'
-import { productsApi, ordersApi, campaignsApi } from '../../lib/supabase'
+import { productsApi, ordersApi, campaignsApi } from '../../../lib/supabase'
 import { Download, FileText, BarChart3, Calendar } from 'lucide-react'
 
 export function Reports() {

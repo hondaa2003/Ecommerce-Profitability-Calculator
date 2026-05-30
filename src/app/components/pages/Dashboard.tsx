@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "../ui/card";
-import { api } from "../../services/api-client";
+import { api } from "../../../services/api-client";
 import { Loader2, CircleDollarSign, TrendingUp, Target, ShoppingCart, Truck, Package, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";

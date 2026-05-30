@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   Bell,
   Calculator,
@@ -17,13 +17,6 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Dashboard } from "./pages/Dashboard";
-import { Products } from "./pages/Products";
-import { Campaigns } from "./pages/Campaigns";
-import { Orders } from "./pages/Orders";
-import { Reports } from "./pages/Reports";
-import { Settings } from "./pages/Settings";
-import { FuturePage } from "./pages/Future";
 import { useI18n } from "./i18n";
 import { LangToggle } from "./LangToggle";
 import { getSupabase } from "./supabase-client";
@@ -42,13 +35,13 @@ interface AppShellProps {
 }
 
 const NAV: { key: PageKey; path: string; tKey: string; icon: any; group: "workspace" | "account" }[] = [
-  { key: "dashboard", path: "/dashboard", tKey: "nav.dashboard", icon: LayoutDashboard, group: "workspace" },
-  { key: "products", path: "/products", tKey: "nav.products", icon: Package, group: "workspace" },
-  { key: "campaigns", path: "/campaigns", tKey: "nav.campaigns", icon: Megaphone, group: "workspace" },
-  { key: "orders", path: "/orders", tKey: "nav.orders", icon: ShoppingCart, group: "workspace" },
-  { key: "reports", path: "/reports", tKey: "nav.reports", icon: FileBarChart, group: "workspace" },
-  { key: "settings", path: "/settings", tKey: "nav.settings", icon: SettingsIcon, group: "account" },
-  { key: "future", path: "/future", tKey: "nav.future", icon: Sparkles, group: "account" },
+  { key: "dashboard", path: "/app/dashboard", tKey: "nav.dashboard", icon: LayoutDashboard, group: "workspace" },
+  { key: "products", path: "/app/products", tKey: "nav.products", icon: Package, group: "workspace" },
+  { key: "campaigns", path: "/app/campaigns", tKey: "nav.campaigns", icon: Megaphone, group: "workspace" },
+  { key: "orders", path: "/app/orders", tKey: "nav.orders", icon: ShoppingCart, group: "workspace" },
+  { key: "reports", path: "/app/reports", tKey: "nav.reports", icon: FileBarChart, group: "workspace" },
+  { key: "settings", path: "/app/settings", tKey: "nav.settings", icon: SettingsIcon, group: "account" },
+  { key: "future", path: "/app/future", tKey: "nav.future", icon: Sparkles, group: "account" },
 ];
 
 export function AppShell({ onExit }: AppShellProps) {
@@ -107,7 +100,7 @@ export function AppShell({ onExit }: AppShellProps) {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white">
             <Calculator className="w-5 h-5" />
           </div>
-          <div className="cursor-pointer" onClick={() => navigate("/")}>
+          <div className="cursor-pointer" onClick={() => navigate("/app/dashboard")}>
             <div className="text-slate-900 font-semibold">ProfitPilot</div>
             <div className="text-[10px] text-slate-500 uppercase tracking-wider">{t("brand.tagline")}</div>
           </div>
@@ -186,26 +179,9 @@ export function AppShell({ onExit }: AppShellProps) {
         </header>
 
         <main className="flex-1 p-6 overflow-x-hidden">
-          <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/campaigns" element={<Campaigns />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/future" element={<FuturePage />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+          <Outlet />
         </main>
       </div>
     </div>
   );
-}
-
-function Navigate({ to, replace }: { to: string; replace?: boolean }) {
-  const navigate = useNavigate();
-  useEffect(() => {
-    navigate(to, { replace });
-  }, [to, replace, navigate]);
-  return null;
 }

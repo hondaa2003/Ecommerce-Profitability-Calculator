@@ -1,14 +1,17 @@
 // src/components/App.tsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Auth } from './Auth'
-import { AppShell } from './AppShell'
-import { Dashboard } from './pages/Dashboard'
-import { Products } from './pages/Products'
-import { Orders } from './pages/Orders'
-import { Campaigns } from './pages/Campaigns'
-import { Reports } from './pages/Reports'
+import { Auth } from './components/Auth'
+import { AppShell } from './components/AppShell'
+import { Landing } from './components/Landing'
+import { Dashboard } from './components/pages/Dashboard'
+import { Products } from './components/pages/Products'
+import { Orders } from './components/pages/Orders'
+import { Campaigns } from './components/pages/Campaigns'
+import { Reports } from './components/pages/Reports'
+import { Settings } from './components/pages/Settings'
+import { FuturePage } from './components/pages/Future'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -48,27 +51,42 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function App() {
+  const navigateToAuth = () => {
+    // Use a global navigation hack since we're inside the Router
+  };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<LandingWrapper />} />
         <Route path="/auth" element={<Auth />} />
         <Route
-          path="/"
+          path="/app"
           element={
             <ProtectedRoute>
-              <AppShell />
+              <AppShell onExit={handleLogout} />
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="products" element={<Products />} />
           <Route path="orders" element={<Orders />} />
           <Route path="campaigns" element={<Campaigns />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="future" element={<FuturePage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/auth" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
+}
+
+function LandingWrapper() {
+  const navigate = useNavigate();
+  return <Landing onEnter={() => navigate('/auth')} />;
 }
