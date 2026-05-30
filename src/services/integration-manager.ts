@@ -12,15 +12,60 @@ export interface PlatformInfo {
   category: 'store' | 'ads';
   description: string;
   docUrl: string;
+  setupInstructions: string;
+  credentialLabel: string;
+  credentialPlaceholder: string;
 }
 
 export const PLATFORMS: Record<PlatformId, PlatformInfo> = {
-  shopify:  { id: 'shopify',  name: 'Shopify',   icon: '🛒', category: 'store', description: 'Sync products, orders, and customers',          docUrl: 'https://shopify.dev/api' },
-  salla:    { id: 'salla',    name: 'Salla',     icon: '🏪', category: 'store', description: 'Sync products, orders, and customers',          docUrl: 'https://docs.salla.dev' },
-  zid:      { id: 'zid',      name: 'Zid',       icon: '🎯', category: 'store', description: 'Sync products, orders, and customers',          docUrl: 'https://developer.zid.sa' },
-  meta:     { id: 'meta',     name: 'Meta Ads',  icon: '📱', category: 'ads',   description: 'Auto-sync spend and ROAS (read-only)',        docUrl: 'https://developers.facebook.com' },
-  tiktok:   { id: 'tiktok',   name: 'TikTok Ads',icon: '🎵', category: 'ads',   description: 'Auto-sync spend and ROAS (read-only)',        docUrl: 'https://ads.tiktok.com' },
-  google:   { id: 'google',   name: 'Google Ads',icon: '🔍', category: 'ads',   description: 'Auto-sync spend and ROAS (read-only)',        docUrl: 'https://developers.google.com/google-ads' },
+  shopify: {
+    id: 'shopify', name: 'Shopify', icon: '🛒', category: 'store',
+    description: 'Sync products, orders, and customers',
+    docUrl: 'https://shopify.dev/api',
+    credentialLabel: 'Store URL',
+    credentialPlaceholder: 'mystore.myshopify.com',
+    setupInstructions: 'Go to Shopify Admin → Settings → Apps → Develop apps → Create an app with Admin API scopes (read_products, read_orders). Copy the Admin API access token.',
+  },
+  salla: {
+    id: 'salla', name: 'Salla', icon: '🏪', category: 'store',
+    description: 'Sync products, orders, and customers',
+    docUrl: 'https://docs.salla.dev',
+    credentialLabel: 'Store URL',
+    credentialPlaceholder: 'https://my-store.salla.sa',
+    setupInstructions: 'Log into your Salla merchant dashboard → Settings → API Keys → Generate new API key. Copy the key for read-only access to products and orders.',
+  },
+  zid: {
+    id: 'zid', name: 'Zid', icon: '🎯', category: 'store',
+    description: 'Sync products, orders, and customers',
+    docUrl: 'https://developer.zid.sa',
+    credentialLabel: 'Store URL',
+    credentialPlaceholder: 'https://my-store.zid.store',
+    setupInstructions: 'Go to Zid Dashboard → Developer Settings → API Management → Create new app. Use the generated token with products:read and orders:read scopes.',
+  },
+  meta: {
+    id: 'meta', name: 'Meta Ads', icon: '📱', category: 'ads',
+    description: 'Auto-sync spend and ROAS (read-only)',
+    docUrl: 'https://developers.facebook.com',
+    credentialLabel: 'Ad Account ID',
+    credentialPlaceholder: 'act_123456789',
+    setupInstructions: 'Go to Facebook Business Settings → Ad Accounts → Select your ad account. Copy the Ad Account ID. Create a Meta App at developers.facebook.com with ads_read permission.',
+  },
+  tiktok: {
+    id: 'tiktok', name: 'TikTok Ads', icon: '🎵', category: 'ads',
+    description: 'Auto-sync spend and ROAS (read-only)',
+    docUrl: 'https://ads.tiktok.com',
+    credentialLabel: 'Ad Account ID',
+    credentialPlaceholder: '1234567890',
+    setupInstructions: 'Log into TikTok Ads Manager → Account Settings → Account Info. Copy your Ad Account ID. Generate an API token from TikTok for Business → Developers.',
+  },
+  google: {
+    id: 'google', name: 'Google Ads', icon: '🔍', category: 'ads',
+    description: 'Auto-sync spend and ROAS (read-only)',
+    docUrl: 'https://developers.google.com/google-ads',
+    credentialLabel: 'Customer ID',
+    credentialPlaceholder: '123-456-7890',
+    setupInstructions: 'Open Google Ads → Tools → Setup → API Center. Copy your Customer ID. Create OAuth2 credentials at console.cloud.google.com for the Google Ads API.',
+  },
 };
 
 interface ConnectionState {

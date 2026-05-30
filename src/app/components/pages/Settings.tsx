@@ -6,7 +6,6 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Switch } from "../ui/switch";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { InfoTip } from "../InfoTip";
@@ -19,7 +18,7 @@ import { useI18n } from "../i18n";
 import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../services/currency-store";
 import { IntegrationManager, PLATFORMS, type PlatformId } from "../../../services/integration-manager";
 
-function isDemoMode(): boolean {
+function isOffline(): boolean {
   return localStorage.getItem("demo_mode") === "true" || localAuth.isAuthenticated();
 }
 
@@ -44,8 +43,11 @@ export function Settings() {
   const [teamMembers] = useState([{ name: "You", role: "Owner", email: "you@example.com" }]);
   const [connections, setConnections] = useState<Record<string, boolean>>({});
   const [syncResults, setSyncResults] = useState<Record<string, string>>({});
+  const [connectDialog, setConnectDialog] = useState<PlatformId | null>(null);
+  const [credentialValue, setCredentialValue] = useState("");
 
   useEffect(() => { loadProfile(); refreshConnections(); }, []);
+  
   const refreshConnections = () => {
     const c: Record<string, boolean> = {};
     Object.keys(PLATFORMS).forEach(id => { c[id] = IntegrationManager.isConnected(id as PlatformId); });
@@ -55,7 +57,7 @@ export function Settings() {
   const loadProfile = async () => {
     try {
       const localUser = localAuth.getUser();
-      if (isDemoMode() || localUser) {
+      if (isOffline() || localUser) {
         setProfile({ ...demoProfile, id: localUser?.id || "demo-user", email: localUser?.email || "demo@profitpilot.app", full_name: localUser?.name || "Demo User", currency: getCurrency() });
         setLoading(false); return;
       }
@@ -65,7 +67,7 @@ export function Settings() {
         const { data } = await supabase.from("user_profiles").select("*").eq("id", user.id).single();
         setProfile(data || { id: user.id, email: user.email || "", full_name: user.email?.split("@")[0] || "User", store_name: "My Store", store_url: "", currency: getCurrency(), default_vat: 5, default_shipping: 0, default_cod_fee: 0, default_packaging: 0 });
       }
-    } catch { if (isDemoMode()) setProfile({ ...demoProfile, currency: getCurrency() }); }
+    } catch { if (isOffline()) setProfile({ ...demoProfile, currency: getCurrency() }); }
     finally { setLoading(false); }
   };
 
@@ -80,7 +82,7 @@ export function Settings() {
     setSaving(true);
     try {
       setCurrency(profile.currency);
-      if (isDemoMode()) { toast.success("Settings saved"); setSaving(false); return; }
+      if (isOffline()) { toast.success("Settings saved"); setSaving(false); return; }
       const supabase = getSupabase();
       const { error } = await supabase.from("user_profiles").upsert({ ...profile });
       if (error) throw error;
@@ -89,15 +91,25 @@ export function Settings() {
     finally { setSaving(false); }
   };
 
-  const handleConnect = (id: PlatformId) => {
-    IntegrationManager.connect(id);
+  const openConnectDialog = (id: PlatformId) => {
+    setCredentialValue("");
+    setConnectDialog(id);
+  };
+
+  const handleConnect = () => {
+    if (!connectDialog) return;
+    const p = PLATFORMS[connectDialog];
+    const creds = p.category === 'store' ? { storeUrl: credentialValue } : { adAccountId: credentialValue };
+    IntegrationManager.connect(connectDialog, { ...creds, apiKey: credentialValue });
     refreshConnections();
-    toast.success(`${PLATFORMS[id].name} connected`);
+    setConnectDialog(null);
+    toast.success(`${p.name} connected successfully`);
   };
 
   const handleDisconnect = (id: PlatformId) => {
     IntegrationManager.disconnect(id);
     refreshConnections();
+    setSyncResults(prev => { const n = { ...prev }; delete n[id]; return n; });
     toast.success(`${PLATFORMS[id].name} disconnected`);
   };
 
@@ -108,9 +120,8 @@ export function Settings() {
       refreshConnections();
       setSyncResults(prev => ({ ...prev, [id]: result.message }));
       toast.success(result.message);
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally { setSyncing(null); }
+    } catch (err: any) { toast.error(err.message); }
+    finally { setSyncing(null); }
   };
 
   const storePlatforms = ['shopify', 'salla', 'zid'] as PlatformId[];
@@ -118,6 +129,8 @@ export function Settings() {
 
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-blue-700" /></div>;
   if (!profile) return <div className="p-6 text-slate-500">{t("empty.loading")}</div>;
+
+  const connectedP = connectDialog ? PLATFORMS[connectDialog] : null;
 
   return (
     <div className="space-y-6 max-w-[1200px] mx-auto" dir={dir}>
@@ -193,7 +206,8 @@ export function Settings() {
             <div className="text-xs text-slate-500 mb-4">{t("settings.storeApisDesc")}</div>
             <div className="space-y-3">
               {storePlatforms.map(id => (
-                <IntegrationRow key={id} id={id} connected={connections[id]} syncing={syncing === id} syncResult={syncResults[id]} onConnect={() => handleConnect(id)} onDisconnect={() => handleDisconnect(id)} onSync={() => handleSync(id)} t={t} />
+                <IntegrationRow key={id} id={id} connected={connections[id]} syncing={syncing === id} syncResult={syncResults[id]}
+                  onConnect={() => openConnectDialog(id)} onDisconnect={() => handleDisconnect(id)} onSync={() => handleSync(id)} />
               ))}
             </div>
           </Card>
@@ -203,11 +217,12 @@ export function Settings() {
             <div className="flex items-center gap-2 text-slate-900 mb-2"><RefreshCw className="w-5 h-5 text-purple-600" />{t("settings.adApis")}</div>
             <div className="text-xs text-slate-500 mb-2">{t("settings.adApisDesc")}</div>
             <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-4">
-              Read-only access only. Your ad accounts will never be modified.
+              ⚠️ Read-only access only. Your ad accounts will never be modified — we only monitor campaign performance.
             </div>
             <div className="space-y-3">
               {adsPlatforms.map(id => (
-                <IntegrationRow key={id} id={id} connected={connections[id]} syncing={syncing === id} syncResult={syncResults[id]} onConnect={() => handleConnect(id)} onDisconnect={() => handleDisconnect(id)} onSync={() => handleSync(id)} t={t} />
+                <IntegrationRow key={id} id={id} connected={connections[id]} syncing={syncing === id} syncResult={syncResults[id]}
+                  onConnect={() => openConnectDialog(id)} onDisconnect={() => handleDisconnect(id)} onSync={() => handleSync(id)} />
               ))}
             </div>
           </Card>
@@ -236,13 +251,56 @@ export function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* API Connection Dialog */}
+      <Dialog open={!!connectDialog} onOpenChange={(open) => { if (!open) setConnectDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-2xl">{connectedP?.icon}</span>
+              Connect {connectedP?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="text-sm text-slate-700">{connectedP?.description}</div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="font-medium text-sm text-blue-800 mb-2">How to get your credentials:</div>
+              <p className="text-xs text-blue-700 leading-relaxed mb-2">{connectedP?.setupInstructions}</p>
+              <a href={connectedP?.docUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                Open documentation <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div>
+              <Label>{connectedP?.credentialLabel}</Label>
+              <Input
+                value={credentialValue}
+                onChange={e => setCredentialValue(e.target.value)}
+                placeholder={connectedP?.credentialPlaceholder}
+                className="mt-1"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                {connectedP?.category === 'store' ? 'Enter your store URL to connect' : 'Enter your ad account ID to monitor'}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setConnectDialog(null)}>Cancel</Button>
+              <Button onClick={handleConnect} disabled={!credentialValue.trim()} className="bg-blue-700 hover:bg-blue-800">
+                <Plug className="w-4 h-4 me-1" /> Authorize & Connect
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function IntegrationRow({ id, connected, syncing, syncResult, onConnect, onDisconnect, onSync, t }: {
+function IntegrationRow({ id, connected, syncing, syncResult, onConnect, onDisconnect, onSync }: {
   id: PlatformId; connected: boolean; syncing: boolean; syncResult?: string;
-  onConnect: () => void; onDisconnect: () => void; onSync: () => void; t: (k: string) => string;
+  onConnect: () => void; onDisconnect: () => void; onSync: () => void;
 }) {
   const p = PLATFORMS[id];
   const conn = IntegrationManager.getConnectionDetails(id);
@@ -253,6 +311,8 @@ function IntegrationRow({ id, connected, syncing, syncResult, onConnect, onDisco
         <div>
           <div className="text-slate-900 text-sm font-medium">{p.name}</div>
           <div className="text-xs text-slate-500">{p.description}</div>
+          {connected && conn.storeUrl && <div className="text-xs text-slate-400 mt-0.5">{conn.storeUrl}</div>}
+          {connected && conn.adAccountId && <div className="text-xs text-slate-400 mt-0.5">{conn.adAccountId}</div>}
           {connected && conn.lastSync && <div className="text-xs text-green-600 mt-0.5">Last sync: {new Date(conn.lastSync).toLocaleString()}</div>}
           {syncResult && <div className="text-xs text-blue-600 mt-0.5">{syncResult}</div>}
         </div>
