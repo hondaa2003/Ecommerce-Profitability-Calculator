@@ -24,9 +24,10 @@ import { LangToggle } from "./LangToggle";
 interface LandingProps {
   onEnter: () => void;
   onShop?: () => void;
+  onDemo?: () => void;
 }
 
-export function Landing({ onEnter }: LandingProps) {
+export function Landing({ onEnter, onDemo }: LandingProps) {
   const { t, dir } = useI18n();
   return (
     <div className="min-h-screen bg-white text-slate-900" dir={dir}>
@@ -76,8 +77,11 @@ export function Landing({ onEnter }: LandingProps) {
               <Button size="lg" onClick={onEnter} className="bg-blue-700 hover:bg-blue-800 text-white">
                 {t("cta.startTrial")} <ArrowRight className="w-4 h-4 ms-1 rtl:rotate-180" />
               </Button>
-              <Button size="lg" variant="outline" onClick={onEnter} className="border-slate-300">
+              <Button size="lg" variant="outline" onClick={onDemo} className="border-slate-300">
                 {t("cta.bookDemo")}
+              </Button>
+              <Button size="lg" variant="ghost" onClick={onDemo} className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50">
+                Try Demo <Zap className="w-4 h-4 ms-1" />
               </Button>
             </div>
             <div className="mt-8 flex items-center gap-6 text-sm text-slate-500 flex-wrap">

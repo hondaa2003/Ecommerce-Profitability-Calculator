@@ -18,6 +18,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false)
 
   useEffect(() => {
+    // Check for demo mode (bypasses auth for offline use)
+    if (localStorage.getItem("demo_mode") === "true") {
+      setAuthenticated(true)
+      setLoading(false)
+      return
+    }
+
     checkAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -55,6 +62,7 @@ export function App() {
     // Use a global navigation hack since we're inside the Router
   };
   const handleLogout = async () => {
+    localStorage.removeItem("demo_mode");
     await supabase.auth.signOut();
   };
 
@@ -63,6 +71,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<LandingWrapper />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/demo" element={<DemoEntry />} />
         <Route
           path="/app"
           element={
@@ -88,5 +97,14 @@ export function App() {
 
 function LandingWrapper() {
   const navigate = useNavigate();
-  return <Landing onEnter={() => navigate('/auth')} />;
+  return <Landing onEnter={() => navigate('/auth')} onDemo={() => navigate('/demo')} />;
+}
+
+function DemoEntry() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    localStorage.setItem("demo_mode", "true");
+    navigate("/app/dashboard", { replace: true });
+  }, [navigate]);
+  return null;
 }
