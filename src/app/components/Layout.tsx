@@ -1,18 +1,30 @@
 import { useState } from 'react';
-import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { Link, useLocation, Outlet, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, FileText, Megaphone, Users, Bot,
   BarChart3, Plug, Building2, Settings, Shield, Bell, Store,
-  LogOut, Search, ChevronDown, Calculator,
+  LogOut, ChevronDown, Calculator, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from './i18n';
 
 export function Layout() {
-  const { user, profile, isAdmin, isAgency, signOut } = useAuth();
+  const { user, profile, isAdmin, isAgency, loading, signOut } = useAuth();
   const { t, dir } = useI18n();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-700" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, tKey: 'nav.dashboard' },
@@ -37,7 +49,6 @@ export function Layout() {
     <div className="min-h-screen bg-gray-50 flex" dir={dir}>
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 z-30 w-60 bg-white border-s border-gray-200 flex flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0 rtl:-translate-x-0' : '-translate-x-full rtl:translate-x-full'} lg:static lg:flex`}>
-        {/* Mobile backdrop */}
         {sidebarOpen && (
           <div className="fixed inset-0 bg-black/30 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
         )}
@@ -85,7 +96,6 @@ export function Layout() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-6 gap-4 sticky top-0 z-20">
           <button className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100" onClick={() => setSidebarOpen(true)}>
             <ChevronDown className="w-5 h-5 rotate-90" />
@@ -107,7 +117,6 @@ export function Layout() {
           </button>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 p-6 overflow-x-hidden">
           <Outlet />
         </main>

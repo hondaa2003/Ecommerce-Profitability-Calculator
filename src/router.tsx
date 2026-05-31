@@ -14,27 +14,9 @@ import { Settings } from './app/components/pages/Settings';
 import { FuturePage } from './app/components/pages/Future';
 import { useAuth } from './app/hooks/useAuth';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <>{children}</>;
-}
-
 function LoginWrapper() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
   if (user) return <Navigate to="/dashboard" replace />;
   return <Auth />;
 }
@@ -50,8 +32,8 @@ export function AppRouter() {
         <Route path="/auth" element={<LoginWrapper />} />
         <Route path="/demo" element={<DemoEntry />} />
 
-        {/* Protected routes — wrapped in Layout */}
-        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        {/* Protected routes — Layout handles auth internally */}
+        <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/products" element={<Products />} />
           <Route path="/orders" element={<Orders />} />
@@ -67,20 +49,12 @@ export function AppRouter() {
         </Route>
 
         {/* Admin routes */}
-        <Route path="/admin" element={
-          <ProtectedRoute>
-            <AdminGuard>
-              <Layout />
-            </AdminGuard>
-          </ProtectedRoute>
-        }>
+        <Route path="/admin" element={<AdminGuard><Layout /></AdminGuard>}>
           <Route index element={<PlaceholderPage label="Admin Dashboard" />} />
         </Route>
 
-        {/* Legacy app routes — redirect to new routes */}
+        {/* Legacy redirects */}
         <Route path="/app/*" element={<Navigate to="/dashboard" replace />} />
-
-        {/* 404 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

@@ -78,6 +78,12 @@ const dict: Dict = {
   "nav.settings": { en: "Settings", ar: "الإعدادات" },
   "nav.future": { en: "Coming Soon", ar: "قريباً" },
   "nav.new": { en: "New", ar: "جديد" },
+  "nav.crm": { en: "CRM", ar: "العملاء" },
+  "nav.aiAdvisor": { en: "AI Advisor", ar: "مستشار الذكاء" },
+  "nav.adAnalyzer": { en: "Ad Analyzer", ar: "محلل الإعلانات" },
+  "nav.integrations": { en: "Integrations", ar: "الربط" },
+  "nav.agency": { en: "Agency", ar: "الوكالة" },
+  "nav.admin": { en: "Admin", ar: "المشرف" },
 
   // Dashboard
   "dash.welcome": { en: "Welcome back, Ahmed 👋", ar: "مرحباً بعودتك، أحمد 👋" },
