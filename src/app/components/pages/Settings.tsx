@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useI18n } from "../i18n";
 import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../services/currency-store";
 import { IntegrationManager, PLATFORMS, type PlatformId } from "../../../services/integration-manager";
+import { SallaConnect } from "../SallaConnect";
 
 function isOffline(): boolean {
   return localStorage.getItem("demo_mode") === "true" || localAuth.isAuthenticated();
@@ -124,7 +125,7 @@ export function Settings() {
     finally { setSyncing(null); }
   };
 
-  const storePlatforms = ['shopify', 'salla', 'zid'] as PlatformId[];
+  const storePlatforms = ['shopify', 'zid'] as PlatformId[];
   const adsPlatforms = ['meta', 'tiktok', 'google'] as PlatformId[];
 
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-blue-700" /></div>;
@@ -202,8 +203,13 @@ export function Settings() {
         <TabsContent value="integrations" className="mt-4 space-y-4">
           {/* Store APIs */}
           <Card className="p-5 rounded-2xl border-slate-200">
-            <div className="flex items-center gap-2 text-slate-900 mb-2"><Plug className="w-5 h-5 text-blue-600" />{t("settings.storeApis")}</div>
+            <div className="flex items-center gap-2 text-slate-900 mb-4"><Plug className="w-5 h-5 text-blue-600" />{t("settings.storeApis")}</div>
             <div className="text-xs text-slate-500 mb-4">{t("settings.storeApisDesc")}</div>
+
+            {/* Salla — Full OAuth integration */}
+            <div className="mb-4">
+              <SallaConnect />
+            </div>
             <div className="space-y-3">
               {storePlatforms.map(id => (
                 <IntegrationRow key={id} id={id} connected={connections[id]} syncing={syncing === id} syncResult={syncResults[id]}
