@@ -1,10 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './app/components/Layout';
 import { AdminGuard } from './app/components/AdminGuard';
 import { PlaceholderPage } from './app/components/PlaceholderPage';
 import { Auth } from './app/components/Auth';
-import { Landing } from './app/components/Landing';
 import { Dashboard } from './app/components/pages/Dashboard';
 import { Products } from './app/components/pages/Products';
 import { Orders } from './app/components/pages/Orders';
@@ -25,14 +23,13 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<LandingWrapper />} />
+        {/* Root: auth gate */}
+        <Route path="/" element={<LoginWrapper />} />
         <Route path="/login" element={<LoginWrapper />} />
         <Route path="/register" element={<LoginWrapper />} />
         <Route path="/auth" element={<LoginWrapper />} />
-        <Route path="/demo" element={<DemoEntry />} />
 
-        {/* Protected routes — Layout handles auth internally */}
+        {/* Protected routes */}
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/products" element={<Products />} />
@@ -53,24 +50,9 @@ export function AppRouter() {
           <Route index element={<PlaceholderPage label="Admin Dashboard" />} />
         </Route>
 
-        {/* Legacy redirects */}
-        <Route path="/app/*" element={<Navigate to="/dashboard" replace />} />
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
-}
-
-function LandingWrapper() {
-  const navigate = useNavigate();
-  return <Landing onEnter={() => navigate('/login')} onDemo={() => navigate('/demo')} />;
-}
-
-function DemoEntry() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    localStorage.setItem('demo_mode', 'true');
-    navigate('/dashboard', { replace: true });
-  }, [navigate]);
-  return null;
 }

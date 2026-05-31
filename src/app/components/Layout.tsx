@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { Link, useLocation, Outlet, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, FileText, Megaphone, Users, Bot,
   BarChart3, Plug, Building2, Settings, Shield, Bell, Store,
-  LogOut, ChevronDown, Calculator, Loader2,
+  LogOut, Calculator, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n } from './i18n';
@@ -12,7 +11,6 @@ export function Layout() {
   const { user, profile, isAdmin, isAgency, loading, signOut } = useAuth();
   const { t, dir } = useI18n();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading) {
     return (
@@ -46,14 +44,10 @@ export function Layout() {
     : user?.email?.slice(0, 2).toUpperCase() || 'U';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" dir={dir}>
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 z-30 w-60 bg-white border-s border-gray-200 flex flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0 rtl:-translate-x-0' : '-translate-x-full rtl:translate-x-full'} lg:static lg:flex`}>
-        {sidebarOpen && (
-          <div className="fixed inset-0 bg-black/30 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
-        )}
-
-        <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-100">
+    <div className="min-h-screen bg-gray-50" dir={dir}>
+      {/* Sidebar — permanently visible, fixed position */}
+      <aside className="fixed inset-y-0 start-0 w-60 bg-white border-e border-gray-200 flex flex-col z-30">
+        <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-100 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center text-white">
             <Calculator className="w-5 h-5" />
           </div>
@@ -71,7 +65,6 @@ export function Layout() {
               <Link
                 key={item.path}
                 to={item.path}
-                onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -83,7 +76,7 @@ export function Layout() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-gray-100">
+        <div className="p-3 border-t border-gray-100 shrink-0">
           <Link to="/settings" className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
             <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-white text-xs font-bold">{initials}</div>
             <div className="flex-1 min-w-0">
@@ -94,13 +87,9 @@ export function Layout() {
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-6 gap-4 sticky top-0 z-20">
-          <button className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100" onClick={() => setSidebarOpen(true)}>
-            <ChevronDown className="w-5 h-5 rotate-90" />
-          </button>
-
+      {/* Main area — offset by sidebar width */}
+      <div className="ms-60 flex flex-col min-h-screen">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 sticky top-0 z-20">
           <h1 className="text-lg font-semibold text-slate-900">{pageTitle}</h1>
           <div className="flex-1" />
 
@@ -117,7 +106,7 @@ export function Layout() {
           </button>
         </header>
 
-        <main className="flex-1 p-6 overflow-x-hidden">
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
       </div>
