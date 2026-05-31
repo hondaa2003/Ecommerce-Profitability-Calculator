@@ -56,7 +56,7 @@ export function SallaConnect() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://cjteefcgtjvgxephwznm.supabase.co";
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://wljecfqzxvojsypqbkzp.supabase.co";
       window.location.href = `${supabaseUrl}/functions/v1/salla-auth/connect?user_id=${user.id}`;
     } catch {
       setConnecting(false);

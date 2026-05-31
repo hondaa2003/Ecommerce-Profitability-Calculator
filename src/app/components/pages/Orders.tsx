@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api } from "../../../services/api-client";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { Badge } from "../ui/badge";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { useI18n } from "../i18n";
 import { formatCurrencyDecimal, getCurrency } from "../../../services/currency-store";
 
@@ -21,6 +21,8 @@ export function Orders() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ product_id: "", customer_name: "", amount: 0, status: "Pending" });
 
   const fetchData = async () => {
@@ -43,6 +45,31 @@ export function Orders() {
       setDialogOpen(false);
       fetchData();
     } catch { toast.error(t("orders.sub")); }
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const rows = text.split("\n").map(line => line.trim()).filter(Boolean);
+      if (rows.length < 2) { toast.error("CSV must have a header row + data"); return; }
+      const headers = rows[0].toLowerCase().split(",").map(h => h.trim().replace(/"/g, ""));
+      const items = rows.slice(1).map(row => {
+        const vals = row.split(",").map(v => v.trim().replace(/"/g, ""));
+        const obj: Record<string, any> = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+        return obj;
+      }).filter(r => r.customer_name);
+      await api.importOrders(items);
+      toast.success(`${items.length} orders imported`);
+      fetchData();
+    } catch { toast.error("Import failed. Check CSV format."); }
+    finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const statusColor = (s: string) => {
@@ -70,7 +97,12 @@ export function Orders() {
           <h1 className="text-2xl font-bold">{t("orders.title")}</h1>
           <p className="text-sm text-slate-500 mt-1">{t("orders.sub")}</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <div className="flex gap-2">
+          <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" />
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
+            <Upload className="w-4 h-4 me-1" /> {importing ? "Importing..." : "CSV"}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 me-1" /> {t("orders.add")}</Button>
           </DialogTrigger>
@@ -109,6 +141,7 @@ export function Orders() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {orders.length === 0 ? (
