@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { InfoTip } from "../InfoTip";
-import { Plug, Plus, Loader2, RefreshCw, Bell } from "lucide-react";
+import { Plug, Plus, Loader2, RefreshCw, Bell, X } from "lucide-react";
 import { supabase } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 import { useI18n } from "../i18n";
@@ -20,6 +21,8 @@ import type { Profile } from "../../types";
 
 export function Settings() {
   const { t, dir } = useI18n();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "store";
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -123,7 +126,7 @@ export function Settings() {
     <div className="space-y-6 max-w-[1200px] mx-auto" dir={dir}>
       <div><h1 className="text-slate-900" style={{ fontSize: "1.5rem", fontWeight: 600 }}>{t("settings.title")}</h1><p className="text-slate-500 text-sm">{t("settings.sub")}</p></div>
 
-      <Tabs defaultValue="store">
+      <Tabs defaultValue={initialTab}>
         <TabsList className="bg-white border border-slate-200">
           <TabsTrigger value="store">{t("settings.store")}</TabsTrigger>
           <TabsTrigger value="team">{t("settings.team")}</TabsTrigger>

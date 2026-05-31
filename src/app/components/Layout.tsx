@@ -25,7 +25,7 @@ export function Layout() {
   }
 
   if (!profile?.onboarding_completed && location.pathname === '/dashboard') {
-    return <Navigate to="/settings" replace />;
+    return <Navigate to="/settings?tab=integrations" replace />;
   }
 
   const navItems = [
