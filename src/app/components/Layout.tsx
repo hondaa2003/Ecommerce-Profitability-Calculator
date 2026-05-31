@@ -24,6 +24,10 @@ export function Layout() {
     return <Navigate to="/login" replace />;
   }
 
+  if (!profile?.onboarding_completed && location.pathname === '/dashboard') {
+    return <Navigate to="/settings" replace />;
+  }
+
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, tKey: 'nav.dashboard' },
     { path: '/products', icon: Package, tKey: 'nav.products' },

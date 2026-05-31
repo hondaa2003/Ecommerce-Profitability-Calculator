@@ -3,9 +3,13 @@ import { supabase } from '../../utils/supabase/client'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Lock, User, ArrowRight, Store } from 'lucide-react'
 import { useI18n } from './i18n'
+import { useAuth } from '../hooks/useAuth'
+import { useEffect } from 'react'
 
 export function Auth() {
   const { t, dir } = useI18n()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,7 +17,12 @@ export function Auth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [user, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,9 +49,7 @@ export function Auth() {
         
         if (signUpError) throw signUpError
         
-        if (data.session) {
-          navigate('/dashboard')
-        } else {
+        if (data.user && !data.session) {
           setMessage("Account created! Please check your email to confirm.")
         }
       } else {
@@ -52,10 +59,6 @@ export function Auth() {
         })
         
         if (signInError) throw signInError
-        
-        if (data.session) {
-          navigate('/dashboard')
-        }
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed.')
