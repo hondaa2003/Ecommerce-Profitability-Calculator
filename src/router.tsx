@@ -87,8 +87,6 @@ export function AppRouter() {
   );
 }
 
-import { useNavigate } from 'react-router-dom';
-
 function LandingWrapper() {
   const navigate = useNavigate();
   return <Landing onEnter={() => navigate('/login')} onDemo={() => navigate('/demo')} />;

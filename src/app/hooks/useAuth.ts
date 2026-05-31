@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../utils/supabase/client';
 import type { Profile } from '../types';
+import { localAuth } from '../../services/local-auth';
 
 interface AuthState {
   user: { id: string; email: string } | null;
@@ -11,68 +11,76 @@ interface AuthState {
   signOut: () => Promise<void>;
 }
 
+const demoProfile: Profile = {
+  id: 'demo', full_name: 'User', avatar_url: null, plan: 'free',
+  is_admin: false, agency_id: null, onboarding_completed: false,
+  created_at: '', updated_at: '',
+};
+
 export function useAuth(): AuthState {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email ?? '' });
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    // Fast path: check localStorage auth
+    const localUser = localAuth.getUser();
+    if (localUser) {
+      setUser({ id: localUser.id, email: localUser.email });
+      setProfile({ ...demoProfile, id: localUser.id, full_name: localUser.name });
+      setLoading(false);
+      return;
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email ?? '' });
-        loadProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-      }
-    });
+    // Demo mode
+    if (localStorage.getItem('demo_mode') === 'true') {
+      setUser({ id: 'demo', email: 'demo@profitpilot.app' });
+      setProfile({ ...demoProfile, full_name: 'Demo User' });
+      setLoading(false);
+      return;
+    }
 
-    return () => subscription.unsubscribe();
+    // Try Supabase
+    import('../../utils/supabase/client').then(({ supabase }) => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser({ id: session.user.id, email: session.user.email ?? '' });
+          loadSupabaseProfile(supabase, session.user.id);
+        } else {
+          setLoading(false);
+        }
+      }).catch(() => setLoading(false));
+
+      supabase.auth.onAuthStateChange((_event: string, session: any) => {
+        if (session?.user) {
+          setUser({ id: session.user.id, email: session.user.email ?? '' });
+          loadSupabaseProfile(supabase, session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      });
+    }).catch(() => setLoading(false));
   }, []);
 
-  async function loadProfile(userId: string) {
+  async function loadSupabaseProfile(supabase: any, userId: string) {
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (data) {
-        setProfile(data as Profile);
-      } else {
-        // Fallback: create minimal profile object
-        setProfile({
-          id: userId,
-          full_name: null,
-          avatar_url: null,
-          plan: 'free',
-          is_admin: false,
-          agency_id: null,
-          onboarding_completed: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      setProfile(data ? (data as Profile) : { ...demoProfile, id: userId });
     } catch {
-      setProfile(null);
+      setProfile({ ...demoProfile, id: userId });
     } finally {
       setLoading(false);
     }
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    localAuth.signOut();
+    try {
+      const { supabase } = await import('../../utils/supabase/client');
+      await supabase.auth.signOut();
+    } catch {}
     setUser(null);
     setProfile(null);
   }

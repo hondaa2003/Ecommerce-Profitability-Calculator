@@ -6,37 +6,38 @@ import {
   LogOut, Search, ChevronDown, Calculator,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useI18n } from './i18n';
 
 export function Layout() {
   const { user, profile, isAdmin, isAgency, signOut } = useAuth();
+  const { t, dir } = useI18n();
   const location = useLocation();
-  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', arLabel: 'الرئيسية' },
-    { path: '/products', icon: Package, label: 'Products', arLabel: 'المنتجات' },
-    { path: '/orders', icon: FileText, label: 'Orders', arLabel: 'الطلبات' },
-    { path: '/campaigns', icon: Megaphone, label: 'Campaigns', arLabel: 'الحملات' },
-    { path: '/crm', icon: Users, label: 'CRM', arLabel: 'العملاء' },
-    { path: '/ai-advisor', icon: Bot, label: 'AI Advisor', arLabel: 'مستشار الذكاء' },
-    { path: '/ad-analyzer', icon: BarChart3, label: 'Ad Analyzer', arLabel: 'محلل الإعلانات' },
-    { path: '/integrations', icon: Plug, label: 'Integrations', arLabel: 'الربط' },
-    ...(isAgency ? [{ path: '/agency', icon: Building2, label: 'Agency', arLabel: 'الوكالة' }] : []),
-    { path: '/settings', icon: Settings, label: 'Settings', arLabel: 'الإعدادات' },
-    ...(isAdmin ? [{ path: '/admin', icon: Shield, label: 'Admin', arLabel: 'المشرف' }] : []),
+    { path: '/dashboard', icon: LayoutDashboard, tKey: 'nav.dashboard' },
+    { path: '/products', icon: Package, tKey: 'nav.products' },
+    { path: '/orders', icon: FileText, tKey: 'nav.orders' },
+    { path: '/campaigns', icon: Megaphone, tKey: 'nav.campaigns' },
+    { path: '/crm', icon: Users, tKey: 'nav.crm' },
+    { path: '/ai-advisor', icon: Bot, tKey: 'nav.aiAdvisor' },
+    { path: '/ad-analyzer', icon: BarChart3, tKey: 'nav.adAnalyzer' },
+    { path: '/integrations', icon: Plug, tKey: 'nav.integrations' },
+    ...(isAgency ? [{ path: '/agency', icon: Building2, tKey: 'nav.agency' }] : []),
+    { path: '/settings', icon: Settings, tKey: 'nav.settings' },
+    ...(isAdmin ? [{ path: '/admin', icon: Shield, tKey: 'nav.admin' }] : []),
   ];
 
-  const pageTitle = navItems.find(i => location.pathname.startsWith(i.path))?.label || 'Dashboard';
+  const pageTitle = t(navItems.find(i => location.pathname.startsWith(i.path))?.tKey || 'nav.dashboard');
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || 'U';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" dir="rtl">
+    <div className="min-h-screen bg-gray-50 flex" dir={dir}>
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 end-auto z-30 w-60 bg-white border-l border-gray-200 flex flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:flex`}>
-        {/* Backdrop for mobile */}
+      <aside className={`fixed inset-y-0 z-30 w-60 bg-white border-s border-gray-200 flex flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0 rtl:-translate-x-0' : '-translate-x-full rtl:translate-x-full'} lg:static lg:flex`}>
+        {/* Mobile backdrop */}
         {sidebarOpen && (
           <div className="fixed inset-0 bg-black/30 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
         )}
@@ -47,7 +48,7 @@ export function Layout() {
           </div>
           <div>
             <div className="text-slate-900 font-semibold text-sm">ProfitPilot</div>
-            <div className="text-[10px] text-slate-400">مراقب الربحية</div>
+            <div className="text-[10px] text-slate-400">{t('brand.tagline')}</div>
           </div>
         </div>
 
@@ -64,8 +65,8 @@ export function Layout() {
                   active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <Icon className={`w-4.5 h-4.5 ${active ? 'text-blue-700' : 'text-slate-400'}`} />
-                <span>{item.arLabel}</span>
+                <Icon className={`w-4 h-4 ${active ? 'text-blue-700' : 'text-slate-400'}`} />
+                <span>{t(item.tKey)}</span>
               </Link>
             );
           })}
@@ -91,19 +92,18 @@ export function Layout() {
           </button>
 
           <h1 className="text-lg font-semibold text-slate-900">{pageTitle}</h1>
-
           <div className="flex-1" />
 
           <Store className="w-4 h-4 text-slate-400" />
-          <span className="text-sm text-slate-600 hidden sm:inline">Store connected</span>
+          <span className="text-sm text-slate-600 hidden sm:inline">{t('settings.store')}</span>
 
           <button className="relative p-2 rounded-lg hover:bg-slate-100 text-slate-500">
-            <Bell className="w-4.5 h-4.5" />
+            <Bell className="w-4 h-4" />
             <span className="absolute top-1.5 end-1.5 w-2 h-2 rounded-full bg-orange-500 border-2 border-white" />
           </button>
 
           <button onClick={signOut} className="p-2 rounded-lg hover:bg-red-50 text-slate-500 hover:text-red-600 transition-colors">
-            <LogOut className="w-4.5 h-4.5" />
+            <LogOut className="w-4 h-4" />
           </button>
         </header>
 
