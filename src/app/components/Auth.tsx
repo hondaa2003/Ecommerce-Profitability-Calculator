@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../../utils/supabase/client'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Lock, User, ArrowRight, Store } from 'lucide-react'
 import { useI18n } from './i18n'
-import { localAuth } from '../../services/local-auth'
 
 export function Auth() {
   const { t, dir } = useI18n()
@@ -30,57 +29,32 @@ export function Auth() {
 
     try {
       if (mode === 'signup') {
-        // Try Supabase first, fall back to localStorage
-        try {
-          const { data, error: signUpError } = await supabase.auth.signUp({
-            email, password,
-            options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin }
-          })
-          if (!signUpError && data.session) {
-            navigate('/app/dashboard')
-            return
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName },
+            emailRedirectTo: window.location.origin
           }
-          if (!signUpError) {
-            setMessage("Account created! Please check your email to confirm.")
-            setLoading(false)
-            return
-          }
-        } catch (_) {
-          // Supabase unreachable, fall back to localStorage
-        }
-
-        // localStorage fallback
-        try {
-          localAuth.signUp(fullName, email, password)
-          setMessage("Account created successfully! You are now signed in.")
-          setTimeout(() => navigate('/app/dashboard'), 500)
-        } catch (localErr: any) {
-          setError(localErr.message)
+        })
+        
+        if (signUpError) throw signUpError
+        
+        if (data.session) {
+          navigate('/dashboard')
+        } else {
+          setMessage("Account created! Please check your email to confirm.")
         }
       } else {
-        // Try Supabase first, fall back to localStorage
-        try {
-          const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-          if (!signInError && data.session) {
-            navigate('/app/dashboard')
-            return
-          }
-          if (signInError) throw signInError
-        } catch (_) {
-          // Supabase unreachable, fall back to localStorage
-        }
-
-        // localStorage fallback
-        try {
-          localAuth.signIn(email, password)
-          setMessage("Signed in successfully!")
-          setTimeout(() => navigate('/app/dashboard'), 300)
-        } catch (localErr: any) {
-          if (localErr.message.includes("No account")) {
-            setError("No account found. Please create an account first.")
-          } else {
-            setError(localErr.message)
-          }
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
+        
+        if (signInError) throw signInError
+        
+        if (data.session) {
+          navigate('/dashboard')
         }
       }
     } catch (err: any) {

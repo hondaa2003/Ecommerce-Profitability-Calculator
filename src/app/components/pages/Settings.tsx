@@ -9,35 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { InfoTip } from "../InfoTip";
-import { tips } from "../glossary";
-import { Plug, Plus, Loader2, RefreshCw, Check, X, ExternalLink } from "lucide-react";
-import { getSupabase } from "../supabase-client";
-import { localAuth } from "../../../services/local-auth";
+import { Plug, Plus, Loader2, RefreshCw, Bell } from "lucide-react";
+import { supabase } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 import { useI18n } from "../i18n";
 import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../services/currency-store";
 import { IntegrationManager, PLATFORMS, type PlatformId } from "../../../services/integration-manager";
 import { SallaConnect } from "../SallaConnect";
-
-function isOffline(): boolean {
-  return localStorage.getItem("demo_mode") === "true" || localAuth.isAuthenticated();
-}
-
-interface UserProfile {
-  id: string; email: string; full_name: string; store_name: string; store_url: string;
-  currency: CurrencyCode; default_vat: number; default_shipping: number;
-  default_cod_fee: number; default_packaging: number;
-}
-
-const demoProfile: UserProfile = {
-  id: "demo-user", email: "demo@profitpilot.app", full_name: "Demo User",
-  store_name: "My Store", store_url: "", currency: getCurrency(),
-  default_vat: 5, default_shipping: 10, default_cod_fee: 15, default_packaging: 5,
-};
+import type { Profile } from "../../types";
 
 export function Settings() {
   const { t, dir } = useI18n();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
@@ -57,39 +40,42 @@ export function Settings() {
 
   const loadProfile = async () => {
     try {
-      const localUser = localAuth.getUser();
-      if (isOffline() || localUser) {
-        setProfile({ ...demoProfile, id: localUser?.id || "demo-user", email: localUser?.email || "demo@profitpilot.app", full_name: localUser?.name || "Demo User", currency: getCurrency() });
-        setLoading(false); return;
-      }
-      const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase.from("user_profiles").select("*").eq("id", user.id).single();
-        setProfile(data || { id: user.id, email: user.email || "", full_name: user.email?.split("@")[0] || "User", store_name: "My Store", store_url: "", currency: getCurrency(), default_vat: 5, default_shipping: 0, default_cod_fee: 0, default_packaging: 0 });
+        const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+        if (data) {
+          setProfile(data as Profile);
+        }
       }
-    } catch { if (isOffline()) setProfile({ ...demoProfile, currency: getCurrency() }); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error("Could not load profile");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCurrency = (val: string) => {
     const code = val as CurrencyCode;
-    setProfile(p => p ? { ...p, currency: code } : null);
     setCurrency(code);
+    // Note: Currency is stored in local storage for now, but we could add it to profile table
   };
 
   const saveProfile = async () => {
     if (!profile) return;
     setSaving(true);
     try {
-      setCurrency(profile.currency);
-      if (isOffline()) { toast.success("Settings saved"); setSaving(false); return; }
-      const supabase = getSupabase();
-      const { error } = await supabase.from("user_profiles").upsert({ ...profile });
+      const { error } = await supabase.from("profiles").update({
+        full_name: profile.full_name,
+        onboarding_completed: profile.onboarding_completed
+      }).eq("id", profile.id);
+      
       if (error) throw error;
       toast.success("Profile saved");
-    } catch { toast.error("Could not save profile"); }
-    finally { setSaving(false); }
+    } catch {
+      toast.error("Could not save profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openConnectDialog = (id: PlatformId) => {
@@ -150,25 +136,13 @@ export function Settings() {
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="text-slate-900 mb-4">{t("settings.storeInfo")}</div>
             <div className="grid md:grid-cols-2 gap-4">
-              <div><Label>{t("store.fullName")}</Label><Input value={profile.full_name} onChange={e => setProfile({ ...profile, full_name: e.target.value })} /></div>
-              <div><Label>{t("store.email")}</Label><Input value={profile.email} disabled /></div>
-              <div><Label>{t("settings.storeName")}</Label><Input value={profile.store_name} onChange={e => setProfile({ ...profile, store_name: e.target.value })} /></div>
-              <div><Label>{t("settings.storeUrl")}</Label><Input value={profile.store_url} onChange={e => setProfile({ ...profile, store_url: e.target.value })} placeholder="https://example.com" /></div>
+              <div><Label>{t("store.fullName")}</Label><Input value={profile.full_name || ""} onChange={e => setProfile({ ...profile, full_name: e.target.value })} /></div>
               <div><Label>{t("settings.currency")}</Label>
-                <Select value={profile.currency} onValueChange={handleCurrency}>
+                <Select value={getCurrency()} onValueChange={handleCurrency}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{CURRENCIES.map(c => <SelectItem key={c.code} value={c.code}>{c.code} — {c.symbol} {c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label className="flex items-center gap-1">{t("products.vat")} (%) <InfoTip tipKey="vat" /></Label><Input type="number" value={profile.default_vat} onChange={e => setProfile({ ...profile, default_vat: Number(e.target.value) })} min="0" max="100" /></div>
-            </div>
-          </Card>
-          <Card className="p-5 rounded-2xl border-slate-200">
-            <div className="text-slate-900 mb-4">{t("settings.defaults")}</div>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div><Label className="flex items-center gap-1">{t("products.shipping")} <InfoTip tipKey="shipping" /></Label><Input type="number" value={profile.default_shipping} onChange={e => setProfile({ ...profile, default_shipping: Number(e.target.value) })} min="0" /></div>
-              <div><Label className="flex items-center gap-1">{t("products.cod")} <InfoTip tipKey="cod" /></Label><Input type="number" value={profile.default_cod_fee} onChange={e => setProfile({ ...profile, default_cod_fee: Number(e.target.value) })} min="0" /></div>
-              <div><Label className="flex items-center gap-1">{t("products.packaging")} <InfoTip tipKey="packaging" /></Label><Input type="number" value={profile.default_packaging} onChange={e => setProfile({ ...profile, default_packaging: Number(e.target.value) })} min="0" /></div>
             </div>
             <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
               <Button className="bg-blue-700 hover:bg-blue-800" onClick={saveProfile} disabled={saving}>
@@ -201,12 +175,9 @@ export function Settings() {
 
         {/* INTEGRATIONS TAB */}
         <TabsContent value="integrations" className="mt-4 space-y-4">
-          {/* Store APIs */}
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="flex items-center gap-2 text-slate-900 mb-4"><Plug className="w-5 h-5 text-blue-600" />{t("settings.storeApis")}</div>
             <div className="text-xs text-slate-500 mb-4">{t("settings.storeApisDesc")}</div>
-
-            {/* Salla — Full OAuth integration */}
             <div className="mb-4">
               <SallaConnect />
             </div>
@@ -218,7 +189,6 @@ export function Settings() {
             </div>
           </Card>
 
-          {/* Ad Platform APIs */}
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="flex items-center gap-2 text-slate-900 mb-2"><RefreshCw className="w-5 h-5 text-purple-600" />{t("settings.adApis")}</div>
             <div className="text-xs text-slate-500 mb-2">{t("settings.adApisDesc")}</div>
@@ -239,18 +209,18 @@ export function Settings() {
           <Card className="p-5 rounded-2xl border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <div><div className="text-slate-900">{t("settings.subscription")}</div><div className="text-xs text-slate-500">{t("settings.subDesc")}</div></div>
-              <Badge className="bg-blue-50 text-blue-700">Pro · Trial</Badge>
+              <Badge className="bg-blue-50 text-blue-700">{profile.plan} · Active</Badge>
             </div>
             <div className="grid md:grid-cols-3 gap-4">
               {[
-                { name: "Basic", price: "$19", current: false, action: t("settings.downgrade") },
-                { name: "Pro", price: "$49", current: true, action: t("settings.manage") },
-                { name: "Agency", price: "$149", current: false, action: t("cta.upgrade") },
+                { name: "free", price: "$0", current: profile.plan === "free", action: "Current" },
+                { name: "pro", price: "$49", current: profile.plan === "pro", action: "Upgrade" },
+                { name: "agency", price: "$149", current: profile.plan === "agency", action: "Upgrade" },
               ].map(plan => (
                 <Card key={plan.name} className={`p-4 rounded-xl ${plan.current ? "border-blue-700 ring-2 ring-blue-100" : "border-slate-200"}`}>
-                  <div className="text-slate-900">{plan.name}{plan.current ? " · Current" : ""}</div>
+                  <div className="text-slate-900 capitalize">{plan.name}</div>
                   <div className="text-2xl mt-1">{plan.price}<span className="text-sm text-slate-500">/mo</span></div>
-                  <Button variant={plan.current ? "default" : "outline"} className={`w-full mt-3 ${plan.current ? "bg-blue-700 hover:bg-blue-800" : "border-slate-200"}`}>{plan.action}</Button>
+                  <Button variant={plan.current ? "default" : "outline"} className={`w-full mt-3 ${plan.current ? "bg-blue-700 hover:bg-blue-800" : "border-slate-200"}`} disabled={plan.current}>{plan.action}</Button>
                 </Card>
               ))}
             </div>
@@ -258,7 +228,6 @@ export function Settings() {
         </TabsContent>
       </Tabs>
 
-      {/* API Connection Dialog */}
       <Dialog open={!!connectDialog} onOpenChange={(open) => { if (!open) setConnectDialog(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -269,34 +238,11 @@ export function Settings() {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="text-sm text-slate-700">{connectedP?.description}</div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="font-medium text-sm text-blue-800 mb-2">How to get your credentials:</div>
-              <p className="text-xs text-blue-700 leading-relaxed mb-2">{connectedP?.setupInstructions}</p>
-              <a href={connectedP?.docUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
-                Open documentation <ExternalLink className="w-3 h-3" />
-              </a>
+            <div className="space-y-2">
+              <Label>{connectedP?.category === 'store' ? 'Store URL' : 'Ad Account ID'}</Label>
+              <Input value={credentialValue} onChange={e => setCredentialValue(e.target.value)} placeholder={connectedP?.category === 'store' ? "https://mystore.com" : "123456789"} />
             </div>
-
-            <div>
-              <Label>{connectedP?.credentialLabel}</Label>
-              <Input
-                value={credentialValue}
-                onChange={e => setCredentialValue(e.target.value)}
-                placeholder={connectedP?.credentialPlaceholder}
-                className="mt-1"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                {connectedP?.category === 'store' ? 'Enter your store URL to connect' : 'Enter your ad account ID to monitor'}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setConnectDialog(null)}>Cancel</Button>
-              <Button onClick={handleConnect} disabled={!credentialValue.trim()} className="bg-blue-700 hover:bg-blue-800">
-                <Plug className="w-4 h-4 me-1" /> Authorize & Connect
-              </Button>
-            </div>
+            <Button onClick={handleConnect} className="w-full bg-blue-700 hover:bg-blue-800" disabled={!credentialValue}>Connect {connectedP?.name}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -304,40 +250,23 @@ export function Settings() {
   );
 }
 
-function IntegrationRow({ id, connected, syncing, syncResult, onConnect, onDisconnect, onSync }: {
-  id: PlatformId; connected: boolean; syncing: boolean; syncResult?: string;
-  onConnect: () => void; onDisconnect: () => void; onSync: () => void;
-}) {
-  const p = PLATFORMS[id];
-  const conn = IntegrationManager.getConnectionDetails(id);
+function IntegrationRow({ id, connected, syncing, syncResult, onConnect, onDisconnect, onSync }: any) {
+  const p = PLATFORMS[id as PlatformId];
+  const { t } = useI18n();
   return (
-    <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-blue-200 transition-colors bg-white">
+    <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
       <div className="flex items-center gap-3">
         <div className="text-2xl">{p.icon}</div>
-        <div>
-          <div className="text-slate-900 text-sm font-medium">{p.name}</div>
-          <div className="text-xs text-slate-500">{p.description}</div>
-          {connected && conn.storeUrl && <div className="text-xs text-slate-400 mt-0.5">{conn.storeUrl}</div>}
-          {connected && conn.adAccountId && <div className="text-xs text-slate-400 mt-0.5">{conn.adAccountId}</div>}
-          {connected && conn.lastSync && <div className="text-xs text-green-600 mt-0.5">Last sync: {new Date(conn.lastSync).toLocaleString()}</div>}
-          {syncResult && <div className="text-xs text-blue-600 mt-0.5">{syncResult}</div>}
-        </div>
+        <div><div className="text-slate-900 text-sm font-medium">{p.name}</div>{syncResult && <div className="text-[10px] text-emerald-600">{syncResult}</div>}</div>
       </div>
       <div className="flex items-center gap-2">
         {connected ? (
           <>
-            <Button size="sm" variant="outline" onClick={onSync} disabled={syncing} className="border-slate-200">
-              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              <span className="ms-1">Sync</span>
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onDisconnect} className="text-red-600 hover:text-red-700 hover:bg-red-50">
-              <X className="w-3.5 h-3.5" />
-            </Button>
+            <Button variant="ghost" size="sm" onClick={onSync} disabled={syncing}>{syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}</Button>
+            <Button variant="ghost" size="sm" onClick={onDisconnect} className="text-red-500 hover:text-red-600 hover:bg-red-50"><X className="w-3.5 h-3.5" /></Button>
           </>
         ) : (
-          <Button size="sm" onClick={onConnect} className="bg-blue-700 hover:bg-blue-800">
-            <Plug className="w-3.5 h-3.5 me-1" /> Connect
-          </Button>
+          <Button variant="outline" size="sm" onClick={onConnect} className="text-xs border-slate-200">{t("settings.connect")}</Button>
         )}
       </div>
     </div>

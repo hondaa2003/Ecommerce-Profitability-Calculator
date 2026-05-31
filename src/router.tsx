@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout } from './app/components/Layout';
 import { AdminGuard } from './app/components/AdminGuard';
 import { PlaceholderPage } from './app/components/PlaceholderPage';
+import { Landing } from './app/components/Landing';
 import { Auth } from './app/components/Auth';
 import { Dashboard } from './app/components/pages/Dashboard';
 import { Products } from './app/components/pages/Products';
@@ -11,6 +12,16 @@ import { Reports } from './app/components/pages/Reports';
 import { Settings } from './app/components/pages/Settings';
 import { FuturePage } from './app/components/pages/Future';
 import { useAuth } from './app/hooks/useAuth';
+
+function RootRoute() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
+  if (user) return <Navigate to="/dashboard" replace />;
+  
+  return <Landing onEnter={() => navigate('/login')} />;
+}
 
 function LoginWrapper() {
   const { user, loading } = useAuth();
@@ -23,8 +34,8 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Root: auth gate */}
-        <Route path="/" element={<LoginWrapper />} />
+        {/* Root: Landing Page */}
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<LoginWrapper />} />
         <Route path="/register" element={<LoginWrapper />} />
         <Route path="/auth" element={<LoginWrapper />} />

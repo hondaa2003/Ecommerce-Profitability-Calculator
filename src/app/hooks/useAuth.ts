@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '../types';
-import { localAuth } from '../../services/local-auth';
 
 interface AuthState {
   user: { id: string; email: string } | null;
@@ -11,8 +10,8 @@ interface AuthState {
   signOut: () => Promise<void>;
 }
 
-const demoProfile: Profile = {
-  id: 'demo', full_name: 'User', avatar_url: null, plan: 'free',
+const defaultProfile: Profile = {
+  id: '', full_name: 'User', avatar_url: null, plan: 'free',
   is_admin: false, agency_id: null, onboarding_completed: false,
   created_at: '', updated_at: '',
 };
@@ -23,63 +22,64 @@ export function useAuth(): AuthState {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fast path: check localStorage auth
-    const localUser = localAuth.getUser();
-    if (localUser) {
-      setUser({ id: localUser.id, email: localUser.email });
-      setProfile({ ...demoProfile, id: localUser.id, full_name: localUser.name });
-      setLoading(false);
-      return;
-    }
+    let mounted = true;
 
-    // Demo mode
-    if (localStorage.getItem('demo_mode') === 'true') {
-      setUser({ id: 'demo', email: 'demo@profitpilot.app' });
-      setProfile({ ...demoProfile, full_name: 'Demo User' });
-      setLoading(false);
-      return;
-    }
-
-    // Try Supabase
-    import('../../utils/supabase/client').then(({ supabase }) => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
+    const initAuth = async () => {
+      try {
+        const { supabase } = await import('../../utils/supabase/client');
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && mounted) {
           setUser({ id: session.user.id, email: session.user.email ?? '' });
-          loadSupabaseProfile(supabase, session.user.id);
-        } else {
+          await loadSupabaseProfile(supabase, session.user.id);
+        } else if (mounted) {
           setLoading(false);
         }
-      }).catch(() => setLoading(false));
 
-      supabase.auth.onAuthStateChange((_event: string, session: any) => {
-        if (session?.user) {
-          setUser({ id: session.user.id, email: session.user.email ?? '' });
-          loadSupabaseProfile(supabase, session.user.id);
-        } else {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        }
-      });
-    }).catch(() => setLoading(false));
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          if (!mounted) return;
+          if (session?.user) {
+            setUser({ id: session.user.id, email: session.user.email ?? '' });
+            await loadSupabaseProfile(supabase, session.user.id);
+          } else {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    const cleanup = initAuth();
+    return () => {
+      mounted = false;
+      cleanup.then(unsub => unsub?.());
+    };
   }, []);
 
   async function loadSupabaseProfile(supabase: any, userId: string) {
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      setProfile(data ? (data as Profile) : { ...demoProfile, id: userId });
-    } catch {
-      setProfile({ ...demoProfile, id: userId });
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (error) throw error;
+      setProfile(data as Profile);
+    } catch (error) {
+      setProfile({ ...defaultProfile, id: userId });
     } finally {
       setLoading(false);
     }
   }
 
   async function signOut() {
-    localAuth.signOut();
     try {
       const { supabase } = await import('../../utils/supabase/client');
       await supabase.auth.signOut();
+      localStorage.removeItem('demo_mode');
     } catch {}
     setUser(null);
     setProfile(null);

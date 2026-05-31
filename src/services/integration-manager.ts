@@ -1,8 +1,6 @@
 // Integration Manager - handles connect/disconnect/sync for all platforms
 // All ad platform integrations are READ-ONLY (monitoring only, no write operations)
 
-import { syncFromIntegration } from './mock-data';
-
 export type PlatformId = 'shopify' | 'salla' | 'zid' | 'meta' | 'tiktok' | 'google';
 
 export interface PlatformInfo {
@@ -109,7 +107,7 @@ export const IntegrationManager = {
     };
     saveState(state);
 
-    // Immediately do an initial sync
+    // Initial sync placeholder
     this.sync(id).catch(console.error);
 
     return state[id];
@@ -130,18 +128,14 @@ export const IntegrationManager = {
     // Simulate sync delay
     await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
 
-    // Generate mock data from the integration (like actually importing products)
-    const result = syncFromIntegration(PLATFORMS[id].name);
-
+    // For now, this is a placeholder until real integration logic is implemented
     state[id].lastSync = new Date().toISOString();
     saveState(state);
 
-    const total = result.products + result.orders + result.campaigns;
-
     return {
       success: true,
-      message: `Imported ${result.products} products, ${result.orders} orders, ${result.campaigns} campaigns from ${PLATFORMS[id].name}`,
-      records: total,
+      message: `Sync with ${PLATFORMS[id].name} completed. (Placeholder for Phase 3)`,
+      records: 0,
     };
   },
 

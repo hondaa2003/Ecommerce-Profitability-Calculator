@@ -92,39 +92,57 @@ app.post('/campaigns', authMiddleware, async (c) => {
   return c.json(data[0], 201)
 })
 
-// --- DASHBOARD STATS (The Intelligence) ---
+// --- DASHBOARD STATS ---
 app.get('/dashboard-stats', authMiddleware, async (c) => {
   const user_id = c.get('user')
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   
-  const { data: ordersData } = await supabase.from('orders').select('amount, product_id, status').eq('user_id', user_id).eq('status', 'Delivered')
+  const { data: ordersData } = await supabase.from('orders').select('amount, product_id, status').eq('user_id', user_id)
   const { data: productsData } = await supabase.from('products').select('id, cogs, shipping, return_cost, cod, packaging, vat, name').eq('user_id', user_id)
   const { data: campaignsData } = await supabase.from('campaigns').select('spend, revenue').eq('user_id', user_id)
 
   const productMap = new Map(productsData?.map(p => [p.id, p]))
-  let totalRev = 0, totalCost = 0, totalOrders = ordersData?.length || 0
+  let totalRev = 0, totalCost = 0, totalOrders = 0, deliveredOrders = 0
   
+  const productPerformance = new Map()
+
   ordersData?.forEach(o => {
-    const p = productMap.get(o.product_id)
-    if (p) {
+    totalOrders++
+    if (o.status === 'Delivered') {
+      deliveredOrders++
       totalRev += o.amount
-      totalCost += (p.cogs + p.shipping + p.return_cost + p.cod + p.packaging + p.vat)
+      const p = productMap.get(o.product_id)
+      if (p) {
+        const cost = (p.cogs + p.shipping + p.return_cost + p.cod + p.packaging + p.vat)
+        totalCost += cost
+        
+        const perf = productPerformance.get(o.product_id) || { name: p.name, revenue: 0, profit: 0, count: 0 }
+        perf.revenue += o.amount
+        perf.profit += (o.amount - cost)
+        perf.count++
+        productPerformance.set(o.product_id, perf)
+      }
     }
   })
 
   const totalSpend = campaignsData?.reduce((s, c) => s + c.spend, 0) || 0
   const campRev = campaignsData?.reduce((s, c) => s + c.revenue, 0) || 0
 
+  const topProducts = Array.from(productPerformance.values())
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 5)
+
   return c.json({
     summary: {
       total_revenue: totalRev,
-      total_profit: totalRev - totalCost,
+      total_profit: totalRev - totalCost - totalSpend,
       total_orders: totalOrders,
+      delivered_rate: totalOrders > 0 ? (deliveredOrders / totalOrders) * 100 : 0,
       total_spend: totalSpend,
       total_roas: totalSpend > 0 ? campRev / totalSpend : 0,
-      avg_order_value: totalOrders > 0 ? totalRev / totalOrders : 0
+      avg_order_value: deliveredOrders > 0 ? totalRev / deliveredOrders : 0
     },
-    top_products: Array.from(productMap.values()).slice(0, 5).map(p => ({ name: p.name, revenue: 100 })) // Simplified for demo
+    top_products: topProducts
   })
 })
 

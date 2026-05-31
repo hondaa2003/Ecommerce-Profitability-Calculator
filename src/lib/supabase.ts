@@ -1,7 +1,4 @@
-// src/lib/supabase.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { mockApi } from "../services/mock-data";
-import { localAuth } from "../services/local-auth";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://cjteefcgtjvgxephwznm.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdGVlZmNndGp2Z3hlcGh3em5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTYxNTksImV4cCI6MjA5MzczMjE1OX0.U9BvJx4q_3Ah_G1BbCHGgQ2qjCW6ooG5YJQKgvFKJwY";
@@ -19,17 +16,7 @@ export function getSupabaseClient(): SupabaseClient {
 
 export const supabase = getSupabaseClient();
 
-function isLocalMode(): boolean {
-  if (typeof window === "undefined") return false;
-  const demo = localStorage.getItem("demo_mode") === "true";
-  const localAuthSession = localAuth.isAuthenticated();
-  return demo || localAuthSession;
-}
-
-// --- API helpers for Reports.tsx ---
-
 async function apiRequest<T>(method: string, endpoint: string, body?: any): Promise<T> {
-  if (isLocalMode()) throw new Error("Offline mode - using mock data");
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Not authenticated");
   const res = await fetch(`${SUPABASE_URL}/functions/v1/server${endpoint}`, {
@@ -45,18 +32,18 @@ async function apiRequest<T>(method: string, endpoint: string, body?: any): Prom
 }
 
 export const productsApi = {
-  list: () => apiRequest<any[]>("GET", "/products").catch(() => mockApi.getProducts()),
-  create: (p: any) => apiRequest<any>("POST", "/products", p).catch(() => mockApi.createProduct(p)),
-  update: (id: string, p: any) => apiRequest<any>("PUT", `/products/${id}`, p).catch(() => mockApi.updateProduct(id, p)),
-  delete: (id: string) => apiRequest<any>("DELETE", `/products/${id}`).catch(() => mockApi.deleteProduct(id)),
+  list: () => apiRequest<any[]>("GET", "/products"),
+  create: (p: any) => apiRequest<any>("POST", "/products", p),
+  update: (id: string, p: any) => apiRequest<any>("PUT", `/products/${id}`, p),
+  delete: (id: string) => apiRequest<any>("DELETE", `/products/${id}`),
 };
 
 export const ordersApi = {
-  list: () => apiRequest<any[]>("GET", "/orders").catch(() => mockApi.getOrders()),
-  create: (o: any) => apiRequest<any>("POST", "/orders", o).catch(() => mockApi.createOrder(o)),
+  list: () => apiRequest<any[]>("GET", "/orders"),
+  create: (o: any) => apiRequest<any>("POST", "/orders", o),
 };
 
 export const campaignsApi = {
-  list: () => apiRequest<any[]>("GET", "/campaigns").catch(() => mockApi.getCampaigns()),
-  create: (c: any) => apiRequest<any>("POST", "/campaigns", c).catch(() => mockApi.createCampaign(c)),
+  list: () => apiRequest<any[]>("GET", "/campaigns"),
+  create: (c: any) => apiRequest<any>("POST", "/campaigns", c),
 };

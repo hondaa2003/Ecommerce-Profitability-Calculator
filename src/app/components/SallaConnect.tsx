@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../utils/supabase/client";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { RefreshCw, ExternalLink } from "lucide-react";
