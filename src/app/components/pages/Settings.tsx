@@ -17,6 +17,7 @@ import { useI18n } from "../i18n";
 import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../services/currency-store";
 import { IntegrationManager, PLATFORMS, type PlatformId } from "../../../services/integration-manager";
 import { SallaConnect } from "../SallaConnect";
+import { ZidConnect } from "../ZidConnect";
 import type { Profile } from "../../types";
 
 export function Settings() {
@@ -37,10 +38,16 @@ export function Settings() {
   
   useEffect(() => {
     const salla = searchParams.get("salla");
+    const zid = searchParams.get("zid");
     if (salla === "connected") {
       toast.success("Salla store connected successfully");
     } else if (salla === "error") {
       toast.error("Salla connection failed. Please try again.");
+    }
+    if (zid === "connected") {
+      toast.success("Zid store connected successfully");
+    } else if (zid === "error") {
+      toast.error("Zid connection failed. Please try again.");
     }
   }, [searchParams]);
   
@@ -192,6 +199,9 @@ export function Settings() {
             <div className="text-xs text-slate-500 mb-4">{t("settings.storeApisDesc")}</div>
             <div className="mb-4">
               <SallaConnect />
+            </div>
+            <div className="mb-4">
+              <ZidConnect />
             </div>
             <div className="space-y-3">
               {storePlatforms.map(id => (
