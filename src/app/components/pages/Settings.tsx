@@ -18,6 +18,7 @@ import { CURRENCIES, CurrencyCode, getCurrency, setCurrency } from "../../../ser
 import { IntegrationManager, PLATFORMS, type PlatformId } from "../../../services/integration-manager";
 import { SallaConnect } from "../SallaConnect";
 import { ZidConnect } from "../ZidConnect";
+import { MetaConnect } from "../MetaConnect";
 import type { Profile } from "../../types";
 
 export function Settings() {
@@ -39,6 +40,7 @@ export function Settings() {
   useEffect(() => {
     const salla = searchParams.get("salla");
     const zid = searchParams.get("zid");
+    const meta = searchParams.get("meta");
     if (salla === "connected") {
       toast.success("Salla store connected successfully");
     } else if (salla === "error") {
@@ -48,6 +50,11 @@ export function Settings() {
       toast.success("Zid store connected successfully");
     } else if (zid === "error") {
       toast.error("Zid connection failed. Please try again.");
+    }
+    if (meta === "connected") {
+      toast.success("Meta Ads connected successfully");
+    } else if (meta === "error") {
+      toast.error("Meta Ads connection failed. Please try again.");
     }
   }, [searchParams]);
   
@@ -216,6 +223,9 @@ export function Settings() {
             <div className="text-xs text-slate-500 mb-2">{t("settings.adApisDesc")}</div>
             <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-4">
               ⚠️ Read-only access only. Your ad accounts will never be modified — we only monitor campaign performance.
+            </div>
+            <div className="mb-4">
+              <MetaConnect />
             </div>
             <div className="space-y-3">
               {adsPlatforms.map(id => (
