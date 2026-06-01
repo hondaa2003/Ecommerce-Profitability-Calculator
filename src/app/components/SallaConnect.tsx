@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabase/client";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
-import { Loader2, ExternalLink, Link, Unlink } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Loader2, ExternalLink, Unlink, Store } from "lucide-react";
 import { useI18n } from "./i18n";
 
 interface ConnectedStore {
@@ -18,18 +18,22 @@ export function SallaConnect() {
   const { t } = useI18n();
   const [store, setStore] = useState<ConnectedStore | null>(null);
   const [loading, setLoading] = useState(true);
-  const [linking, setLinking] = useState(false);
-  const [storeUrl, setStoreUrl] = useState("");
-  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     checkConnection();
   }, []);
 
   async function checkConnection() {
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) {
+        setStore(null);
+        setLoading(false);
+        return;
+      }
 
       const { data } = await supabase
         .from("stores")
@@ -37,7 +41,7 @@ export function SallaConnect() {
         .eq("user_id", user.id)
         .eq("platform", "salla")
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
       setStore(data || null);
     } catch {
@@ -47,81 +51,67 @@ export function SallaConnect() {
     }
   }
 
-  async function handleLink() {
-    if (!storeUrl.trim()) return;
-    setLinking(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const domain = storeUrl.trim().replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
-
-      const { data: unclaimed } = await supabase
-        .from("stores")
-        .select("id")
-        .eq("platform", "salla")
-        .eq("store_url", domain)
-        .is("user_id", null)
-        .single();
-
-      if (unclaimed) {
-        await supabase.from("stores").update({
-          user_id: user.id,
-          updated_at: new Date().toISOString(),
-        }).eq("id", unclaimed.id);
-        setStoreUrl("");
-        setShowLinkInput(false);
-        checkConnection();
-      }
-    } catch {
-      setLinking(false);
-    }
-  }
-
   async function handleDisconnect() {
+    if (!store) return;
+    setDisconnecting(true);
     try {
-      if (store) {
-        await supabase.from("stores").update({
-          is_active: false,
-          updated_at: new Date().toISOString(),
-        }).eq("id", store.id);
-        setStore(null);
-      }
-    } catch {}
+      await supabase
+        .from("stores")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", store.id);
+      setStore(null);
+    } catch {
+    } finally {
+      setDisconnecting(false);
+    }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 p-4 text-sm text-slate-400">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        {t("empty.loading")}
+      <div className="border border-slate-200 rounded-xl p-4 bg-white">
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+          <span className="text-sm text-slate-400">{t("empty.loading")}</span>
+        </div>
       </div>
     );
   }
 
   if (store) {
     return (
-      <div className="border border-green-200 rounded-xl p-4 bg-green-50/50">
+      <div className="border border-green-200 rounded-xl p-4 bg-green-50/40">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">{String.fromCodePoint(0x1F6CD)}</span>
+            <span className="text-2xl">🛍️</span>
             <div>
-              <div className="font-medium text-slate-900">{store.store_name}</div>
+              <div className="font-semibold text-slate-900">{store.store_name}</div>
               <div className="flex items-center gap-2 mt-0.5">
-                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Connected</Badge>
+                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs font-medium">
+                  متصل
+                </Badge>
                 {store.store_url && (
-                  <a href={`https://${store.store_url}`} target="_blank" rel="noopener noreferrer"
-                     className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5">
-                    {store.store_url} <ExternalLink className="w-3 h-3" />
+                  <a
+                    href={`https://${store.store_url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                  >
+                    {store.store_url}
+                    <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
               </div>
             </div>
           </div>
-          <Button size="sm" variant="ghost" onClick={handleDisconnect}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+          >
             <Unlink className="w-3.5 h-3.5 me-1" />
-            Disconnect
+            {disconnecting ? "..." : "Disconnect"}
           </Button>
         </div>
       </div>
@@ -129,48 +119,68 @@ export function SallaConnect() {
   }
 
   return (
-    <div className="border border-slate-200 rounded-xl p-4 bg-white">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-2xl">{String.fromCodePoint(0x1F6CD)}</span>
-        <div>
-          <div className="font-medium text-slate-900">Salla</div>
-          <p className="text-xs text-slate-500">Easy Mode — install from Salla App Store</p>
+    <>
+      <div className="border border-slate-200 rounded-xl p-4 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🛍️</span>
+            <div>
+              <div className="font-semibold text-slate-900">Salla</div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-xs font-medium">
+                  غير متصل
+                </Badge>
+                <span className="text-xs text-slate-400">Easy Mode</span>
+              </div>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setShowModal(true)}
+            className="bg-blue-700 hover:bg-blue-800 text-xs"
+          >
+            <Store className="w-3.5 h-3.5 me-1" />
+            ربط متجر سلة
+          </Button>
         </div>
       </div>
 
-      {!showLinkInput ? (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Install <strong>ProfitPilot</strong> from the Salla App Store. Your store will be connected automatically via webhook.
-          </p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setShowLinkInput(true)}>
-              <Link className="w-3.5 h-3.5 me-1" />
-              Link My Store
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="text-2xl">🛍️</span>
+              ربط متجر سلة
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-sm text-blue-800 leading-relaxed">
+                قم بتثبيت تطبيق <strong>ProfitPilot</strong> من متجر تطبيقات سلة وسيتم الربط تلقائياً.
+              </p>
+            </div>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p className="font-medium text-slate-800">كيف يعمل الربط؟</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-slate-500">
+                <li>اذهب إلى متجر تطبيقات سلة</li>
+                <li>ابحث عن <strong>ProfitPilot</strong> وقم بتثبيته</li>
+                <li>سيتم إرسال رمز الوصول تلقائياً إلى حسابك</li>
+                <li>بعد التثبيت، سيظهر متجرك هنا كـ "متصل"</li>
+              </ol>
+            </div>
+            <div className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3">
+              لا تحتاج لإدخال أي مفاتيح أو روابط. عملية الربط تتم بشكل تلقائي بالكامل عبر Easy Mode.
+            </div>
+            <Button
+              onClick={() => setShowModal(false)}
+              className="w-full"
+              variant="outline"
+            >
+              فهمت
             </Button>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Enter your Salla store domain (e.g. <code className="bg-slate-100 px-1 rounded">mystore.salla.sa</code>) to link it to your account.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              value={storeUrl}
-              onChange={(e) => setStoreUrl(e.target.value)}
-              placeholder="mystore.salla.sa"
-              className="flex-1"
-            />
-            <Button size="sm" onClick={handleLink} disabled={linking || !storeUrl.trim()}>
-              {linking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Link"}
-            </Button>
-          </div>
-          <button onClick={() => setShowLinkInput(false)} className="text-xs text-slate-400 hover:text-slate-600">
-            Cancel
-          </button>
-        </div>
-      )}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
