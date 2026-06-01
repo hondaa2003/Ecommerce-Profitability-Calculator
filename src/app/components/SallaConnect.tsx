@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabase/client";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Loader2, ExternalLink, Unlink, Store } from "lucide-react";
 import { useI18n } from "./i18n";
 
@@ -14,12 +13,14 @@ interface ConnectedStore {
   is_active: boolean;
 }
 
+const CONNECT_URL = "https://wljecfqzxvojsypqbkzp.supabase.co/functions/v1/salla-auth/connect";
+
 export function SallaConnect() {
   const { t } = useI18n();
   const [store, setStore] = useState<ConnectedStore | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     checkConnection();
@@ -31,9 +32,12 @@ export function SallaConnect() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setStore(null);
+        setUserId(null);
         setLoading(false);
         return;
       }
+
+      setUserId(user.id);
 
       const { data } = await supabase
         .from("stores")
@@ -49,6 +53,11 @@ export function SallaConnect() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleConnect() {
+    if (!userId) return;
+    window.location.href = `${CONNECT_URL}?user_id=${userId}`;
   }
 
   async function handleDisconnect() {
@@ -119,68 +128,29 @@ export function SallaConnect() {
   }
 
   return (
-    <>
-      <div className="border border-slate-200 rounded-xl p-4 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🛍️</span>
-            <div>
-              <div className="font-semibold text-slate-900">Salla</div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-xs font-medium">
-                  غير متصل
-                </Badge>
-                <span className="text-xs text-slate-400">Easy Mode</span>
-              </div>
+    <div className="border border-slate-200 rounded-xl p-4 bg-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🛍️</span>
+          <div>
+            <div className="font-semibold text-slate-900">Salla</div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-xs font-medium">
+                غير متصل
+              </Badge>
+              <span className="text-xs text-slate-400">Custom OAuth</span>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setShowModal(true)}
-            className="bg-blue-700 hover:bg-blue-800 text-xs"
-          >
-            <Store className="w-3.5 h-3.5 me-1" />
-            ربط متجر سلة
-          </Button>
         </div>
+        <Button
+          size="sm"
+          onClick={handleConnect}
+          className="bg-blue-700 hover:bg-blue-800 text-xs"
+        >
+          <Store className="w-3.5 h-3.5 me-1" />
+          ربط متجر سلة
+        </Button>
       </div>
-
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <span className="text-2xl">🛍️</span>
-              ربط متجر سلة
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm text-blue-800 leading-relaxed">
-                قم بتثبيت تطبيق <strong>ProfitPilot</strong> من متجر تطبيقات سلة وسيتم الربط تلقائياً.
-              </p>
-            </div>
-            <div className="space-y-2 text-sm text-slate-600">
-              <p className="font-medium text-slate-800">كيف يعمل الربط؟</p>
-              <ol className="list-decimal list-inside space-y-1.5 text-slate-500">
-                <li>اذهب إلى متجر تطبيقات سلة</li>
-                <li>ابحث عن <strong>ProfitPilot</strong> وقم بتثبيته</li>
-                <li>سيتم إرسال رمز الوصول تلقائياً إلى حسابك</li>
-                <li>بعد التثبيت، سيظهر متجرك هنا كـ "متصل"</li>
-              </ol>
-            </div>
-            <div className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3">
-              لا تحتاج لإدخال أي مفاتيح أو روابط. عملية الربط تتم بشكل تلقائي بالكامل عبر Easy Mode.
-            </div>
-            <Button
-              onClick={() => setShowModal(false)}
-              className="w-full"
-              variant="outline"
-            >
-              فهمت
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 }

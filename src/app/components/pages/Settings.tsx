@@ -35,6 +35,15 @@ export function Settings() {
 
   useEffect(() => { loadProfile(); refreshConnections(); }, []);
   
+  useEffect(() => {
+    const salla = searchParams.get("salla");
+    if (salla === "connected") {
+      toast.success("Salla store connected successfully");
+    } else if (salla === "error") {
+      toast.error("Salla connection failed. Please try again.");
+    }
+  }, [searchParams]);
+  
   const refreshConnections = () => {
     const c: Record<string, boolean> = {};
     Object.keys(PLATFORMS).forEach(id => { c[id] = IntegrationManager.isConnected(id as PlatformId); });
